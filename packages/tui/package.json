@@ -1,0 +1,19 @@
+{
+  "name": "tui",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.5.11",
+    "@opentui/keymap": "^0.5.11",
+    "@opentui/react": "^0.5.11",
+    "effect": "^3.22.2",
+    "react": "^19.2.0"
+  }
+}

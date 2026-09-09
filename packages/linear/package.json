@@ -1,0 +1,16 @@
+{
+  "name": "linear",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@linear/sdk": "^94.0.0",
+    "effect": "^3.22.2"
+  }
+}
