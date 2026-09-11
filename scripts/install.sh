@@ -70,6 +70,10 @@ download "$base/checksums.txt" "$tmp_dir/checksums.txt" || fail "could not downl
 
 expected=$(awk -v file="$asset" '$2 == file || $2 == ("*" file) { print $1; exit }' "$tmp_dir/checksums.txt")
 [ -n "$expected" ] || fail "checksums.txt does not contain $asset"
+[ "${#expected}" -eq 64 ] || fail "checksums.txt contains an invalid SHA-256 value for $asset"
+case "$expected" in
+  *[!0-9a-fA-F]*) fail "checksums.txt contains an invalid SHA-256 value for $asset" ;;
+esac
 
 if command -v sha256sum >/dev/null 2>&1; then
   actual=$(sha256sum "$tmp_dir/$asset" | awk '{ print $1 }')
@@ -81,6 +85,9 @@ fi
 
 [ "$actual" = "$expected" ] || fail "checksum verification failed for $asset"
 
+archive_entries=$(tar -tzf "$tmp_dir/$asset") || fail "release archive is invalid"
+[ "$archive_entries" = "lineater" ] || [ "$archive_entries" = "./lineater" ] \
+  || fail "release archive must contain only the lineater executable"
 tar -xzf "$tmp_dir/$asset" -C "$tmp_dir"
 [ -f "$tmp_dir/lineater" ] || fail "release archive does not contain the lineater executable"
 chmod 755 "$tmp_dir/lineater"

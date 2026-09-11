@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { PreferencesService } from "@lineater/core";
 import { Effect, Layer } from "effect";
-import { chmod, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ConfigService, makeAppPaths, makeOAuthConfig, PreferencesLive } from "./index";
@@ -24,17 +24,57 @@ describe("Lineater configuration", () => {
     expect(() => makeOAuthConfig({ LINEATER_LINEAR_CLIENT_ID: "client", LINEATER_LINEAR_SCOPES: "read,unknown" }, {})).toThrow("over-privileged");
   });
 
+  test("rejects plaintext credentials in the non-sensitive config file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "lineater-config-secret-"));
+    const paths = makeAppPaths({ HOME: root, LINEATER_CONFIG_DIR: root });
+    await writeFile(paths.configPath, `${JSON.stringify({ accessToken: "must-not-live-here" })}\n`, { mode: 0o600 });
+    const initial = { theme: "linear", defaultView: "list" as const, autoSync: true, keybindings: {} };
+    const ConfigTest = Layer.succeed(ConfigService, { paths, oauth: null, preferences: initial });
+    try {
+      await expect(Effect.runPromise(
+        PreferencesService.pipe(
+          Effect.flatMap(({ save }) => save(initial)),
+          Effect.provide(PreferencesLive),
+          Effect.provide(ConfigTest),
+        ),
+      )).rejects.toThrow("Secrets and tokens are not allowed");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects symbolic-link config targets before persisting preferences", async () => {
+    const root = await mkdtemp(join(tmpdir(), "lineater-config-link-"));
+    const paths = makeAppPaths({ HOME: root, LINEATER_CONFIG_DIR: root });
+    const target = join(root, "target.json");
+    await writeFile(target, "{}\n");
+    await symlink(target, paths.configPath);
+    const initial = { theme: "linear", defaultView: "list" as const, autoSync: true, keybindings: {} };
+    const ConfigTest = Layer.succeed(ConfigService, { paths, oauth: null, preferences: initial });
+    try {
+      await expect(Effect.runPromise(
+        PreferencesService.pipe(
+          Effect.flatMap(({ save }) => save(initial)),
+          Effect.provide(PreferencesLive),
+          Effect.provide(ConfigTest),
+        ),
+      )).rejects.toThrow("symbolic link");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("atomically persists non-sensitive TUI preferences with restrictive permissions", async () => {
     const root = await mkdtemp(join(tmpdir(), "lineater-config-"));
     const paths = makeAppPaths({ HOME: root, LINEATER_CONFIG_DIR: root });
     await writeFile(paths.configPath, `${JSON.stringify({ linearClientId: "keep-me" })}\n`);
     await chmod(paths.configPath, 0o600);
-    const initial = { theme: "linear", defaultView: "list" as const, autoSync: true };
+    const initial = { theme: "linear", defaultView: "list" as const, autoSync: true, keybindings: {} };
     const ConfigTest = Layer.succeed(ConfigService, { paths, oauth: null, preferences: initial });
     try {
       await Effect.runPromise(
         PreferencesService.pipe(
-          Effect.flatMap(({ save }) => save({ theme: "catppuccin-mocha", defaultView: "board", autoSync: false })),
+          Effect.flatMap(({ save }) => save({ theme: "catppuccin-mocha", defaultView: "board", autoSync: false, keybindings: { "app.settings": "ctrl+," } })),
           Effect.provide(PreferencesLive),
           Effect.provide(ConfigTest),
         ),
@@ -45,6 +85,7 @@ describe("Lineater configuration", () => {
         theme: "catppuccin-mocha",
         defaultView: "board",
         autoSync: false,
+        keybindings: { "app.settings": "ctrl+," },
       });
       expect((await stat(paths.configPath)).mode & 0o777).toBe(0o600);
     } finally {

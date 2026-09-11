@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Command } from "@effect/cli";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
-import { AuthLive, BrowserLive, SecretStoreLive } from "@lineater/auth";
+import { AuthLive, BrowserLive, ClipboardLive, SecretStoreLive } from "@lineater/auth";
 import { lineaterCommand } from "@lineater/cli";
 import { ConfigLive, ConfigService, makeFileLogLayer, PreferencesLive } from "@lineater/config";
 import { LinearLive } from "@lineater/linear";
@@ -33,6 +33,8 @@ const TuiDependencies = Layer.mergeAll(
   ConfiguredAuthLive,
   ConfiguredLinearLive,
   ConfiguredPreferencesLive,
+  BrowserLive,
+  ClipboardLive,
 );
 const ConfiguredTuiLive = TuiLive.pipe(Layer.provide(TuiDependencies));
 

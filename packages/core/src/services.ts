@@ -8,6 +8,7 @@ import type {
   Cycle,
   InitialReadModel,
   Issue,
+  IssueQuery,
   Label,
   Page,
   Project,
@@ -48,6 +49,7 @@ export class CommentRepository extends Context.Tag("@lineater/core/CommentReposi
 export interface ReadModelRepositoryShape {
   readonly saveIdentity: (identity: AuthenticatedIdentity) => Effect.Effect<void, StorageError>;
   readonly saveInitialReadModel: (model: InitialReadModel) => Effect.Effect<void, StorageError>;
+  readonly mergeIssues: (issues: readonly Issue[], syncedAt: Date) => Effect.Effect<void, StorageError>;
   readonly loadInitialReadModel: Effect.Effect<InitialReadModel | null, StorageError>;
 }
 export class ReadModelRepository extends Context.Tag("@lineater/core/ReadModelRepository")<ReadModelRepository, ReadModelRepositoryShape>() {}
@@ -65,6 +67,11 @@ export interface BrowserServiceShape {
 }
 export class BrowserService extends Context.Tag("@lineater/core/BrowserService")<BrowserService, BrowserServiceShape>() {}
 
+export interface ClipboardServiceShape {
+  readonly copy: (text: string) => Effect.Effect<void, TuiError>;
+}
+export class ClipboardService extends Context.Tag("@lineater/core/ClipboardService")<ClipboardService, ClipboardServiceShape>() {}
+
 export interface SecretStoreShape {
   readonly get: (name: string) => Effect.Effect<string | null, AuthError>;
   readonly set: (name: string, value: string) => Effect.Effect<void, AuthError>;
@@ -77,7 +84,8 @@ export interface LinearServiceShape {
   readonly users: (after?: string) => Effect.Effect<Page<User>, LinearApiError | AuthError>;
   readonly teams: (after?: string) => Effect.Effect<Page<Team>, LinearApiError | AuthError>;
   readonly workflowStates: (after?: string) => Effect.Effect<Page<WorkflowState>, LinearApiError | AuthError>;
-  readonly issues: (after?: string) => Effect.Effect<Page<Issue>, LinearApiError | AuthError>;
+  readonly issues: (after?: string, query?: IssueQuery) => Effect.Effect<Page<Issue>, LinearApiError | AuthError>;
+  readonly updatedIssues: (since: Date, after?: string) => Effect.Effect<Page<Issue>, LinearApiError | AuthError>;
   readonly issue: (identifier: string) => Effect.Effect<Issue | null, LinearApiError | AuthError>;
   readonly projects: (after?: string) => Effect.Effect<Page<Project>, LinearApiError | AuthError>;
   readonly cycles: (after?: string) => Effect.Effect<Page<Cycle>, LinearApiError | AuthError>;

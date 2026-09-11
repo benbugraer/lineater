@@ -4,6 +4,27 @@ export type LayoutMode = "too-small" | "single" | "medium" | "wide";
 export type WorkspaceView = "list" | "board";
 export type ActivePane = "sidebar" | "issues" | "detail";
 
+export interface IssueFilters {
+  readonly stateId: string | null;
+  readonly projectId: string | null;
+  readonly cycleId: string | null;
+  readonly assigneeId: string | null;
+  readonly priority: number | null;
+  readonly labelId: string | null;
+}
+
+export const emptyIssueFilters: IssueFilters = {
+  stateId: null,
+  projectId: null,
+  cycleId: null,
+  assigneeId: null,
+  priority: null,
+  labelId: null,
+};
+
+export const activeIssueFilterCount = (filters: IssueFilters): number =>
+  Object.values(filters).filter((value) => value !== null).length;
+
 export const layoutMode = (width: number, height: number): LayoutMode => {
   if (width < 58 || height < 18) return "too-small";
   if (width < 86) return "single";
@@ -20,10 +41,17 @@ export const visibleIssues = (
   model: InitialReadModel,
   teamId: string | null,
   query: string,
+  filters: IssueFilters = emptyIssueFilters,
 ): readonly Issue[] => {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   return model.issues.filter((issue) => {
     if (teamId !== null && issue.teamId !== teamId) return false;
+    if (filters.stateId !== null && issue.stateId !== filters.stateId) return false;
+    if (filters.projectId !== null && issue.projectId !== filters.projectId) return false;
+    if (filters.cycleId !== null && issue.cycleId !== filters.cycleId) return false;
+    if (filters.assigneeId !== null && issue.assigneeId !== filters.assigneeId) return false;
+    if (filters.priority !== null && issue.priority !== filters.priority) return false;
+    if (filters.labelId !== null && !issue.labelIds.includes(filters.labelId)) return false;
     if (!normalizedQuery) return true;
     return issue.identifier.toLocaleLowerCase().includes(normalizedQuery)
       || issue.title.toLocaleLowerCase().includes(normalizedQuery);

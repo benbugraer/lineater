@@ -18,6 +18,8 @@ export const commandNames = [
   "issue.changeLabels",
   "issue.changeProject",
   "issue.changeCycle",
+  "issue.copyIdentifier",
+  "issue.openInBrowser",
   "composer.nextField",
   "composer.pickTeam",
   "composer.pickStatus",
@@ -32,6 +34,7 @@ export const commandNames = [
   "app.back",
   "app.search",
   "app.filter",
+  "filter.clear",
   "app.commandPalette",
   "app.settings",
   "app.help",
@@ -65,6 +68,8 @@ export const normalBindingDefinitions = [
   { key: "t", cmd: "issue.changeLabels" },
   { key: { name: "p", shift: true }, cmd: "issue.changeProject" },
   { key: { name: "c", shift: true }, cmd: "issue.changeCycle" },
+  { key: "y", cmd: "issue.copyIdentifier" },
+  { key: "o", cmd: "issue.openInBrowser" },
   { key: "escape", cmd: "app.back" },
   { key: "/", cmd: "app.search" },
   { key: "f", cmd: "app.filter" },
@@ -81,6 +86,26 @@ export const normalBindingDefinitions = [
 ] as const;
 
 export const normalBindings: readonly Binding<Renderable, KeyEvent>[] = normalBindingDefinitions;
+
+export const normalBindingsFor = (
+  overrides: Readonly<Record<string, string>>,
+): readonly Binding<Renderable, KeyEvent>[] => {
+  const commandSet = new Set<string>(commandNames);
+  const validOverrides = Object.entries(overrides)
+    .filter(([command, key]) => commandSet.has(command) && key.trim().length > 0)
+    .map(([command, key]) => ({ command: command as CommandName, key: key.trim() }));
+  if (validOverrides.length === 0) return normalBindings;
+  const overriddenCommands = new Set(validOverrides.map(({ command }) => command));
+  const overriddenKeys = new Set(validOverrides.map(({ key }) => key.toLocaleLowerCase()));
+  return [
+    ...normalBindings.filter((binding) => {
+      if (binding.key === "ctrl+c") return true;
+      if (overriddenCommands.has(binding.cmd as CommandName)) return false;
+      return typeof binding.key !== "string" || !overriddenKeys.has(binding.key.toLocaleLowerCase());
+    }),
+    ...validOverrides.map(({ command, key }) => ({ key, cmd: command })),
+  ];
+};
 
 export const helpBindings: readonly Binding<Renderable, KeyEvent>[] = [
   { key: "escape", cmd: "app.back" },
@@ -101,6 +126,21 @@ export const statusBindings: readonly Binding<Renderable, KeyEvent>[] = [
   ...inputBindings,
   { key: "j", cmd: "navigation.down" },
   { key: "k", cmd: "navigation.up" },
+];
+
+export const filterBindings: readonly Binding<Renderable, KeyEvent>[] = [
+  { key: "escape", cmd: "app.back" },
+  { key: "ctrl+c", cmd: "app.quit" },
+  { key: "return", cmd: "issue.open" },
+  { key: "j", cmd: "navigation.down" },
+  { key: "down", cmd: "navigation.down" },
+  { key: "k", cmd: "navigation.up" },
+  { key: "up", cmd: "navigation.up" },
+  { key: "h", cmd: "navigation.left" },
+  { key: "left", cmd: "navigation.left" },
+  { key: "l", cmd: "navigation.right" },
+  { key: "right", cmd: "navigation.right" },
+  { key: "x", cmd: "filter.clear" },
 ];
 
 export const settingsBindings: readonly Binding<Renderable, KeyEvent>[] = [

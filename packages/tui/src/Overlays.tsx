@@ -5,7 +5,7 @@ import { useTerminalDimensions } from "@opentui/react";
 import { useEffect, useRef } from "react";
 import { themes, useTheme } from "./theme";
 
-export type Overlay = "none" | "help" | "search" | "palette" | "status" | "composer" | "comment" | "picker" | "settings";
+export type Overlay = "none" | "help" | "search" | "palette" | "status" | "composer" | "comment" | "picker" | "settings" | "filters";
 
 export interface IssueDraft {
   readonly mode: "create" | "edit";
@@ -57,7 +57,7 @@ export function HelpOverlay() {
             <box height={1} />
             <text fg={theme.palette.muted}>DISCOVER</text>
             <Shortcut keys="/" label="Search issues" />
-            <Shortcut keys="f" label="Cycle team filter" />
+            <Shortcut keys="f" label="Issue filters" />
             <Shortcut keys=":" label="Command palette" />
           </box>
           <box width="50%" flexDirection="column">
@@ -67,6 +67,7 @@ export function HelpOverlay() {
             <Shortcut keys="a / p" label="Assignee / priority" />
             <Shortcut keys="t" label="Choose labels" />
             <Shortcut keys="P / C" label="Project / cycle" />
+            <Shortcut keys="y / o" label="Copy ID / open Linear" />
             <Shortcut keys="b" label="List / board" />
             <Shortcut keys="H / L" label="Move issue status" />
             <Shortcut keys="r" label="Refresh from Linear" />
@@ -131,6 +132,22 @@ interface StatusOverlayProps {
   readonly selectedIndex: number;
 }
 
+const ComposerMetadata = ({ label, value }: { readonly label: string; readonly value: string }) => {
+  const theme = useTheme();
+  return <box height={1} flexDirection="row">
+    <box width={11}><text fg={theme.palette.muted}>{label}</text></box>
+    <text fg={theme.palette.textSecondary}>{value}</text>
+  </box>;
+};
+
+const ComposerShortcut = ({ keys, label }: { readonly keys: string; readonly label: string }) => {
+  const theme = useTheme();
+  return <box height={1} flexDirection="row">
+    <box width={7}><text fg={theme.palette.accentText}>{keys}</text></box>
+    <text fg={theme.palette.textSecondary}>{label}</text>
+  </box>;
+};
+
 export function IssueComposerOverlay({ draft, field, team, status, priority, assignee, project, cycle, labels, saving, onTitle, onDescription }: {
   readonly draft: IssueDraft;
   readonly field: "title" | "description";
@@ -146,6 +163,8 @@ export function IssueComposerOverlay({ draft, field, team, status, priority, ass
   readonly onDescription: (value: string) => void;
 }) {
   const theme = useTheme();
+  const { width, height } = useTerminalDimensions();
+  const compact = width < 86 || height < 24;
   const titleRef = useRef<InputRenderable>(null);
   const descriptionRef = useRef<TextareaRenderable>(null);
   useEffect(() => {
@@ -155,7 +174,7 @@ export function IssueComposerOverlay({ draft, field, team, status, priority, ass
   }, [draft.mode]);
   return (
     <box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center" backgroundColor={theme.palette.overlay}>
-      <box width="88%" height="82%" border borderColor={theme.palette.borderActive} backgroundColor={theme.palette.elevated} flexDirection="column">
+      <box width={compact ? "96%" : "88%"} height={compact ? "92%" : "88%"} border borderColor={theme.palette.borderActive} backgroundColor={theme.palette.elevated} flexDirection="column">
         <box height={3} paddingLeft={2} paddingRight={2} backgroundColor={theme.palette.panel} alignItems="center" flexDirection="row" border={["bottom"]} borderColor={theme.palette.border}>
           <text fg={theme.palette.text}><span fg={theme.palette.accent}>◆</span> <strong>{draft.mode === "create" ? "Create issue" : "Edit issue"}</strong></text>
           <box flexGrow={1} /><text fg={saving ? theme.palette.warning : theme.palette.subtle}>{saving ? "SAVING…" : "esc cancel"}</text>
@@ -185,13 +204,76 @@ export function IssueComposerOverlay({ draft, field, team, status, priority, ass
             />
           </box>
         </box>
-        <box height={7} paddingLeft={2} paddingRight={2} paddingTop={1} backgroundColor={theme.palette.panel} border={["top"]} borderColor={theme.palette.border} flexDirection="column">
-          <text fg={theme.palette.textSecondary}><span fg={theme.palette.muted}>Team </span>{team}  <span fg={theme.palette.muted}>Status </span>{status}  <span fg={theme.palette.muted}>Priority </span>{priority}</text>
-          <text fg={theme.palette.textSecondary}><span fg={theme.palette.muted}>Assignee </span>{assignee}  <span fg={theme.palette.muted}>Project </span>{project}  <span fg={theme.palette.muted}>Cycle </span>{cycle}</text>
-          <text fg={theme.palette.textSecondary}><span fg={theme.palette.muted}>Labels </span>{labels}</text>
-          <text fg={theme.palette.textSecondary}><span fg={theme.palette.accentText}>tab</span> field · <span fg={theme.palette.accentText}>^t</span> team · <span fg={theme.palette.accentText}>^o</span> status · <span fg={theme.palette.accentText}>^p</span> priority · <span fg={theme.palette.accentText}>^a</span> assignee · <span fg={theme.palette.accentText}>^l</span> labels</text>
-          <text fg={theme.palette.textSecondary}><span fg={theme.palette.accentText}>^g</span> project · <span fg={theme.palette.accentText}>^y</span> cycle · <span fg={theme.palette.accentText}>^e</span> external editor · <span fg={theme.palette.accentText}>^s</span> {draft.mode === "create" ? "create issue" : "save changes"}</text>
-        </box>
+        {compact ? (
+          <box height={8} backgroundColor={theme.palette.panel} border={["top"]} borderColor={theme.palette.border} flexDirection="column">
+            <box height={4} paddingLeft={2} paddingRight={2} flexDirection="row">
+              <box width="50%" flexDirection="column">
+                <ComposerMetadata label="TEAM" value={team} />
+                <ComposerMetadata label="STATUS" value={status} />
+                <ComposerMetadata label="PRIORITY" value={priority} />
+                <ComposerMetadata label="ASSIGNEE" value={assignee} />
+              </box>
+              <box width="50%" paddingLeft={1} border={["left"]} borderColor={theme.palette.border} flexDirection="column">
+                <ComposerMetadata label="PROJECT" value={project} />
+                <ComposerMetadata label="CYCLE" value={cycle} />
+                <ComposerMetadata label="LABELS" value={labels} />
+              </box>
+            </box>
+            <box flexGrow={1} paddingLeft={2} paddingRight={2} backgroundColor={theme.palette.surface} border={["top"]} borderColor={theme.palette.border} flexDirection="row">
+              <box width="50%" flexDirection="column">
+                <ComposerShortcut keys="TAB" label="Next field" />
+                <ComposerShortcut keys="^E" label="External editor" />
+              </box>
+              <box width="50%" flexDirection="column">
+                <ComposerShortcut keys="^T…^L" label="Edit metadata" />
+                <ComposerShortcut keys="^S" label={draft.mode === "create" ? "Create issue" : "Save changes"} />
+              </box>
+            </box>
+          </box>
+        ) : (
+          <box height={13} backgroundColor={theme.palette.panel} border={["top"]} borderColor={theme.palette.border} flexDirection="column">
+            <box height={6} paddingLeft={2} paddingRight={2} paddingTop={1} flexDirection="row">
+              <box width="50%" paddingRight={2} border={["right"]} borderColor={theme.palette.border} flexDirection="column">
+                <text fg={theme.palette.subtle}>ISSUE DETAILS</text>
+                <ComposerMetadata label="Team" value={team} />
+                <ComposerMetadata label="Status" value={status} />
+                <ComposerMetadata label="Priority" value={priority} />
+                <ComposerMetadata label="Assignee" value={assignee} />
+              </box>
+              <box width="50%" paddingLeft={2} flexDirection="column">
+                <text fg={theme.palette.subtle}>PLANNING</text>
+                <ComposerMetadata label="Project" value={project} />
+                <ComposerMetadata label="Cycle" value={cycle} />
+                <ComposerMetadata label="Labels" value={labels} />
+              </box>
+            </box>
+            <box flexGrow={1} paddingLeft={2} paddingRight={2} backgroundColor={theme.palette.surface} border={["top"]} borderColor={theme.palette.border} flexDirection="row">
+              <box width="25%" flexDirection="column">
+                <text fg={theme.palette.subtle}>EDIT</text>
+                <ComposerShortcut keys="TAB" label="Next field" />
+                <ComposerShortcut keys="^E" label="External editor" />
+              </box>
+              <box width="25%" flexDirection="column">
+                <text fg={theme.palette.subtle}>ISSUE</text>
+                <ComposerShortcut keys="^T" label="Team" />
+                <ComposerShortcut keys="^O" label="Status" />
+                <ComposerShortcut keys="^P" label="Priority" />
+                <ComposerShortcut keys="^A" label="Assignee" />
+              </box>
+              <box width="25%" flexDirection="column">
+                <text fg={theme.palette.subtle}>PLANNING</text>
+                <ComposerShortcut keys="^G" label="Project" />
+                <ComposerShortcut keys="^Y" label="Cycle" />
+                <ComposerShortcut keys="^L" label="Labels" />
+              </box>
+              <box width="25%" flexDirection="column">
+                <text fg={theme.palette.subtle}>FINISH</text>
+                <ComposerShortcut keys="^S" label={draft.mode === "create" ? "Create issue" : "Save changes"} />
+                <ComposerShortcut keys="ESC" label="Cancel" />
+              </box>
+            </box>
+          </box>
+        )}
       </box>
     </box>
   );
@@ -267,6 +349,50 @@ export function PickerOverlay({ title, options, selectedIndex, multiple = false 
           ) : (
             <text fg={theme.palette.textSecondary}><span fg={theme.palette.accentText}>j/k</span> select · <span fg={theme.palette.accentText}>enter</span> apply</text>
           )}
+        </box>
+      </box>
+    </box>
+  );
+}
+
+export interface FilterRow {
+  readonly label: string;
+  readonly value: string;
+  readonly active: boolean;
+}
+
+export function FilterOverlay({ rows, selectedIndex, activeCount }: {
+  readonly rows: readonly FilterRow[];
+  readonly selectedIndex: number;
+  readonly activeCount: number;
+}) {
+  const theme = useTheme();
+  const { width, height } = useTerminalDimensions();
+  const visibleCount = height < 24 ? 4 : rows.length;
+  const start = Math.max(0, Math.min(rows.length - visibleCount, selectedIndex - Math.floor(visibleCount / 2)));
+  const visibleRows = rows.slice(start, start + visibleCount);
+  return (
+    <box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center" backgroundColor={theme.palette.overlay}>
+      <box width={Math.min(64, width - 4)} height={Math.min(height, 6 + visibleRows.length * 3)} border borderColor={theme.palette.borderActive} backgroundColor={theme.palette.surface} flexDirection="column">
+        <box height={3} paddingLeft={2} paddingRight={2} backgroundColor={theme.palette.panel} alignItems="center" flexDirection="row" border={["bottom"]} borderColor={theme.palette.border}>
+          <text fg={theme.palette.text}><span fg={theme.palette.accent}>◆</span> <strong>Issue filters</strong></text>
+          <box flexGrow={1} /><text fg={activeCount > 0 ? theme.palette.accentText : theme.palette.subtle}>{activeCount} active · esc close</text>
+        </box>
+        <box flexGrow={1} backgroundColor={theme.palette.surface} flexDirection="column">
+          {visibleRows.map((row, offset) => {
+            const index = start + offset;
+            const selected = index === selectedIndex;
+            return (
+              <box key={row.label} height={3} paddingLeft={2} paddingRight={2} backgroundColor={selected ? theme.palette.selection : theme.palette.surface} alignItems="center" flexDirection="row">
+                <text fg={selected ? theme.palette.text : theme.palette.textSecondary}>{selected ? "› " : "  "}{row.label}</text>
+                <box flexGrow={1} />
+                <text fg={row.active ? theme.palette.accentText : theme.palette.muted}>{row.value}</text>
+              </box>
+            );
+          })}
+        </box>
+        <box height={2} paddingLeft={2} backgroundColor={theme.palette.panel} border={["top"]} borderColor={theme.palette.border}>
+          <text fg={theme.palette.textSecondary}><span fg={theme.palette.accentText}>j/k</span> field · <span fg={theme.palette.accentText}>h/l</span> value · <span fg={theme.palette.accentText}>x</span> clear all</text>
         </box>
       </box>
     </box>

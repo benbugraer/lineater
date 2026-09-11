@@ -9,7 +9,7 @@ import { updateIssue } from "./update-issue";
 
 const now = new Date("2026-03-01T10:00:00.000Z");
 const issue: Issue = {
-  id: "issue-1", teamId: "team-1", identifier: "ENG-1", number: 1, title: "Original",
+  id: "issue-1", teamId: "team-1", identifier: "ENG-1", url: "https://linear.app/acme/issue/ENG-1/original", number: 1, title: "Original",
   description: null, priority: 0, stateId: "todo", assigneeId: null, projectId: null,
   cycleId: null, labelIds: [], sortOrder: 1, completedAt: null, canceledAt: null,
   createdAt: now, updatedAt: now,
@@ -17,7 +17,7 @@ const issue: Issue = {
 const page = Effect.succeed({ items: [], endCursor: null, hasNextPage: false });
 const makeLinear = (overrides: Partial<LinearServiceShape>): LinearServiceShape => ({
   viewer: Effect.dieMessage("unused"), users: () => page, teams: () => page,
-  workflowStates: () => page, issues: () => page, issue: () => Effect.succeed(null),
+  workflowStates: () => page, issues: () => page, updatedIssues: () => page, issue: () => Effect.succeed(null),
   projects: () => page, cycles: () => page, labels: () => page, comments: () => page,
   createComment: () => Effect.dieMessage("unused"), createIssue: () => Effect.dieMessage("unused"),
   updateIssue: () => Effect.dieMessage("unused"), changeIssueStatus: () => Effect.dieMessage("unused"),

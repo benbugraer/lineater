@@ -11,26 +11,31 @@ import {
   commandNames,
   commentBindings,
   composerBindings,
+  filterBindings,
   helpBindings,
   inputBindings,
-  normalBindings,
+  normalBindingsFor,
   pickerBindings,
   settingsBindings,
   statusBindings,
   type CommandName,
 } from "./keymap";
 import {
+  activeIssueFilterCount,
   adjacentStatus,
+  emptyIssueFilters,
   layoutMode,
   moveIndex,
   orderedStates,
   replaceIssue,
   visibleIssues,
   type ActivePane,
+  type IssueFilters,
   type WorkspaceView,
 } from "./model";
 import {
   CommentComposerOverlay,
+  FilterOverlay,
   HelpOverlay,
   InputOverlay,
   IssueComposerOverlay,
@@ -53,7 +58,7 @@ interface LineaterAppProps {
 type Phase = "booting" | "unauthenticated" | "authorizing" | "syncing" | "ready";
 type Notice = { readonly tone: "info" | "error"; readonly message: string };
 
-const defaultPreferences: AppPreferences = { theme: "linear", defaultView: "list", autoSync: true };
+const defaultPreferences: AppPreferences = { theme: "linear", defaultView: "list", autoSync: true, keybindings: {} };
 
 const priorities = [
   { id: "0", label: "No priority" },
@@ -72,10 +77,12 @@ const paletteCommands: readonly { readonly command: CommandName; readonly label:
   { command: "issue.changeLabels", label: "Change labels" },
   { command: "issue.changeProject", label: "Change project" },
   { command: "issue.changeCycle", label: "Change cycle" },
+  { command: "issue.copyIdentifier", label: "Copy issue identifier" },
+  { command: "issue.openInBrowser", label: "Open issue in Linear" },
   { command: "view.toggle", label: "Toggle list / board view" },
   { command: "app.refresh", label: "Refresh from Linear" },
   { command: "app.search", label: "Search issues" },
-  { command: "app.filter", label: "Cycle team filter" },
+  { command: "app.filter", label: "Filter issues" },
   { command: "app.settings", label: "Open settings" },
   { command: "app.help", label: "Show keyboard shortcuts" },
   { command: "app.quit", label: "Quit Lineater" },
@@ -93,6 +100,9 @@ const applyIssuePatch = (issue: Issue, input: UpdateIssueInput): Issue => ({
   ...(input.cycleId !== undefined ? { cycleId: input.cycleId } : {}),
   updatedAt: new Date(),
 });
+
+const wrapIndex = (current: number, delta: -1 | 1, length: number): number =>
+  length <= 0 ? 0 : (current + delta + length) % length;
 
 const safeMessage = (cause: unknown): string => {
   const message = typeof cause === "object" && cause !== null && "message" in cause && typeof cause.message === "string"
@@ -114,6 +124,9 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
   const [activePane, setActivePane] = useState<ActivePane>("issues");
   const [navigationIndex, setNavigationIndex] = useState(0);
   const [filterIndex, setFilterIndex] = useState(0);
+  const [issueFilters, setIssueFilters] = useState<IssueFilters>(emptyIssueFilters);
+  const [filterPanelIndex, setFilterPanelIndex] = useState(0);
+  const filterPanelIndexRef = useRef(0);
   const [issueIndex, setIssueIndex] = useState(0);
   const [columnIndex, setColumnIndex] = useState(0);
   const [boardRowIndex, setBoardRowIndex] = useState(0);
@@ -165,7 +178,8 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
         return;
       }
       setSyncing(true);
-      controller.sync().then((fresh) => {
+      const synchronize = cachedModel ? controller.syncIncremental : controller.sync;
+      synchronize().then((fresh) => {
         if (!mounted) return;
         setModel(fresh);
         if (normalizedPreferences.defaultView === "board" && fresh.teams.length > 0) {
@@ -207,11 +221,11 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
   const teamFilter = activeFilter?.id.startsWith("team:") ? activeFilter.id.slice(5) : null;
   const filteredIssues = useMemo(() => {
     if (!model) return [];
-    const teamIssues = visibleIssues(model, teamFilter, query);
+    const teamIssues = visibleIssues(model, teamFilter, query, issueFilters);
     return activeFilter?.id === "mine"
       ? teamIssues.filter(({ assigneeId }) => assigneeId === model.viewer.id)
       : teamIssues;
-  }, [activeFilter?.id, model, query, teamFilter]);
+  }, [activeFilter?.id, issueFilters, model, query, teamFilter]);
 
   const boardStates = model && view === "board" ? orderedStates(model, teamFilter) : [];
   const boardState = boardStates[columnIndex];
@@ -248,6 +262,23 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
         return [{ id: "", label: "No cycle", selected: (draft?.cycleId ?? currentIssue?.cycleId ?? null) === null }, ...model.cycles.filter(({ teamId }) => teamId === pickerTeamId).map(({ id, name, number }) => ({ id, label: name ?? `Cycle ${number}`, selected: id === (draft?.cycleId ?? currentIssue?.cycleId) }))];
     }
   }, [draft, model, pickerKind, pickerLabelIds, pickerTeamId, selectedIssue]);
+
+  const filterRows = useMemo(() => {
+    const state = model?.workflowStates.find(({ id }) => id === issueFilters.stateId);
+    const project = model?.projects.find(({ id }) => id === issueFilters.projectId);
+    const cycle = model?.cycles.find(({ id }) => id === issueFilters.cycleId);
+    const assignee = model?.users.find(({ id }) => id === issueFilters.assigneeId);
+    const label = model?.labels.find(({ id }) => id === issueFilters.labelId);
+    return [
+      { label: "Team / ownership", value: activeFilter?.label ?? "All issues", active: filterIndex !== 0 },
+      { label: "Status", value: state?.name ?? "Any", active: issueFilters.stateId !== null },
+      { label: "Project", value: project?.name ?? "Any", active: issueFilters.projectId !== null },
+      { label: "Cycle", value: cycle?.name ?? (cycle ? `Cycle ${cycle.number}` : "Any"), active: issueFilters.cycleId !== null },
+      { label: "Assignee", value: assignee?.displayName ?? "Any", active: issueFilters.assigneeId !== null },
+      { label: "Priority", value: issueFilters.priority === null ? "Any" : priorities.find(({ id }) => id === String(issueFilters.priority))?.label ?? "Any", active: issueFilters.priority !== null },
+      { label: "Label", value: label?.name ?? "Any", active: issueFilters.labelId !== null },
+    ];
+  }, [activeFilter?.label, filterIndex, issueFilters, model]);
 
   useEffect(() => {
     setIssueIndex((current) => moveIndex(current, 0, filteredIssues.length));
@@ -530,6 +561,64 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
     setActivePane("issues");
   };
 
+  const openFilters = () => {
+    filterPanelIndexRef.current = 0;
+    setFilterPanelIndex(0);
+    setOverlay("filters");
+  };
+
+  const moveFilterField = (delta: -1 | 1) => {
+    const next = moveIndex(filterPanelIndexRef.current, delta, filterRows.length);
+    filterPanelIndexRef.current = next;
+    setFilterPanelIndex(next);
+  };
+
+  const cycleFilterValue = (delta: -1 | 1) => {
+    if (!model) return;
+    const field = filterPanelIndexRef.current;
+    if (field === 0) {
+      const next = wrapIndex(filterIndex, delta, navigation.length);
+      setIssueFilters(emptyIssueFilters);
+      applyFilter(next);
+      setOverlay("filters");
+      return;
+    }
+    const unfiltered = null;
+    const choices: readonly (string | number | null)[] = field === 1
+      ? [unfiltered, ...orderedStates(model, teamFilter).map(({ id }) => id)]
+      : field === 2
+        ? [unfiltered, ...model.projects.map(({ id }) => id)]
+        : field === 3
+          ? [unfiltered, ...model.cycles.filter((cycle) => teamFilter === null || cycle.teamId === teamFilter).map(({ id }) => id)]
+          : field === 4
+            ? [unfiltered, ...model.users.filter(({ active }) => active).map(({ id }) => id)]
+            : field === 5
+              ? [unfiltered, 0, 1, 2, 3, 4]
+              : [unfiltered, ...model.labels.filter((label) => teamFilter === null || label.teamId === null || label.teamId === teamFilter).map(({ id }) => id)];
+    const current = field === 1 ? issueFilters.stateId
+      : field === 2 ? issueFilters.projectId
+      : field === 3 ? issueFilters.cycleId
+      : field === 4 ? issueFilters.assigneeId
+      : field === 5 ? issueFilters.priority
+      : issueFilters.labelId;
+    const next = choices[wrapIndex(Math.max(0, choices.indexOf(current)), delta, choices.length)] ?? null;
+    setIssueFilters((filters) => field === 1 ? { ...filters, stateId: next as string | null }
+      : field === 2 ? { ...filters, projectId: next as string | null }
+      : field === 3 ? { ...filters, cycleId: next as string | null }
+      : field === 4 ? { ...filters, assigneeId: next as string | null }
+      : field === 5 ? { ...filters, priority: next as number | null }
+      : { ...filters, labelId: next as string | null });
+    setIssueIndex(0);
+    setBoardRowIndex(0);
+  };
+
+  const clearFilters = () => {
+    setIssueFilters(emptyIssueFilters);
+    applyFilter(0);
+    setOverlay("filters");
+    setNotice({ tone: "info", message: "Issue filters cleared" });
+  };
+
   const setIssueStatus = (issue: Issue, stateId: string) => {
     if (!model || mutationIssueId || issue.stateId === stateId) return;
     const original = issue;
@@ -621,6 +710,20 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
     });
   };
 
+  const copySelectedIssue = () => {
+    if (!selectedIssue) return;
+    controller.copyIssueIdentifier(selectedIssue).then(() => {
+      setNotice({ tone: "info", message: `${selectedIssue.identifier} copied` });
+    }).catch((cause: unknown) => setNotice({ tone: "error", message: safeMessage(cause) }));
+  };
+
+  const openSelectedIssueInBrowser = () => {
+    if (!selectedIssue) return;
+    controller.openIssueInBrowser(selectedIssue).then(() => {
+      setNotice({ tone: "info", message: `Opened ${selectedIssue.identifier} in Linear` });
+    }).catch((cause: unknown) => setNotice({ tone: "error", message: safeMessage(cause) }));
+  };
+
   const runPaletteSelection = () => {
     const selection = filteredPalette[overlayIndex];
     if (!selection) return;
@@ -636,10 +739,12 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       case "issue.changeLabels": openPicker("labels", "workspace"); break;
       case "issue.changeProject": openPicker("project", "workspace"); break;
       case "issue.changeCycle": openPicker("cycle", "workspace"); break;
+      case "issue.copyIdentifier": copySelectedIssue(); break;
+      case "issue.openInBrowser": openSelectedIssueInBrowser(); break;
       case "view.toggle": toggleView(); break;
       case "app.refresh": refresh(); break;
       case "app.search": setOverlay("search"); break;
-      case "app.filter": applyFilter((filterIndex + 1) % Math.max(1, navigation.length)); break;
+      case "app.filter": openFilters(); break;
       case "app.settings": openSettings(); break;
       case "app.help": setOverlay("help"); break;
       case "app.quit": onExit(); break;
@@ -649,7 +754,9 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
 
   const actions: Record<CommandName, () => void> = {
     "navigation.down": () => {
-      if (overlay === "settings") {
+      if (overlay === "filters") {
+        moveFilterField(1);
+      } else if (overlay === "settings") {
         moveSettingsIndex(1);
       } else if (overlay === "picker") {
         setOverlayIndex((current) => moveIndex(current, 1, pickerOptions.length));
@@ -667,7 +774,9 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       }
     },
     "navigation.up": () => {
-      if (overlay === "settings") {
+      if (overlay === "filters") {
+        moveFilterField(-1);
+      } else if (overlay === "settings") {
         moveSettingsIndex(-1);
       } else if (overlay === "picker") {
         setOverlayIndex((current) => moveIndex(current, -1, pickerOptions.length));
@@ -695,7 +804,9 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       else setIssueIndex(Math.max(0, filteredIssues.length - 1));
     },
     "navigation.left": () => {
-      if (overlay === "settings") {
+      if (overlay === "filters") {
+        cycleFilterValue(-1);
+      } else if (overlay === "settings") {
         changeSetting(-1);
       } else if (view === "board") {
         setColumnIndex((current) => moveIndex(current, -1, boardStates.length));
@@ -707,7 +818,9 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       }
     },
     "navigation.right": () => {
-      if (overlay === "settings") {
+      if (overlay === "filters") {
+        cycleFilterValue(1);
+      } else if (overlay === "settings") {
         changeSetting(1);
       } else if (view === "board") {
         setColumnIndex((current) => moveIndex(current, 1, boardStates.length));
@@ -721,6 +834,8 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
     "issue.open": () => {
       if (phase === "unauthenticated") {
         authorize();
+      } else if (overlay === "filters") {
+        cycleFilterValue(1);
       } else if (overlay === "settings") {
         changeSetting(1);
       } else if (overlay === "search") {
@@ -759,6 +874,8 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
     "issue.changeLabels": () => openPicker("labels", "workspace"),
     "issue.changeProject": () => openPicker("project", "workspace"),
     "issue.changeCycle": () => openPicker("cycle", "workspace"),
+    "issue.copyIdentifier": copySelectedIssue,
+    "issue.openInBrowser": openSelectedIssueInBrowser,
     "composer.nextField": () => setComposerField((current) => current === "title" ? "description" : "title"),
     "composer.pickTeam": () => openPicker("team", "composer"),
     "composer.pickStatus": () => openPicker("status", "composer"),
@@ -800,8 +917,9 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       }
     },
     "app.filter": () => {
-      if (navigation.length > 0) applyFilter((filterIndex + 1) % navigation.length);
+      if (phase === "ready") openFilters();
     },
+    "filter.clear": clearFilters,
     "app.commandPalette": () => {
       if (phase === "ready") {
         setPaletteQuery("");
@@ -843,10 +961,16 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       return true;
     },
   }));
+  const customizedNormalBindings = useMemo(
+    () => normalBindingsFor(preferences.keybindings),
+    [preferences.keybindings],
+  );
   const bindings = overlay === "none"
-    ? normalBindings
+    ? customizedNormalBindings
     : overlay === "help"
       ? helpBindings
+      : overlay === "filters"
+        ? filterBindings
       : overlay === "settings"
         ? settingsBindings
       : overlay === "status"
@@ -891,6 +1015,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
         selectedColumnIndex={columnIndex}
         detailOpen={detailOpen}
         query={query}
+        activeFilterCount={activeIssueFilterCount(issueFilters) + (filterIndex === 0 ? 0 : 1)}
         syncing={syncing}
         cachedOnly={cachedOnly}
         mutationIssueId={mutationIssueId}
@@ -951,6 +1076,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       ) : null}
       {overlay === "picker" ? <PickerOverlay title={pickerTitle} options={pickerOptions} selectedIndex={overlayIndex} multiple={pickerKind === "labels"} /> : null}
       {overlay === "settings" ? <SettingsOverlay preferences={preferences} selectedIndex={settingsIndex} /> : null}
+      {overlay === "filters" ? <FilterOverlay rows={filterRows} selectedIndex={filterPanelIndex} activeCount={activeIssueFilterCount(issueFilters) + (filterIndex === 0 ? 0 : 1)} /> : null}
       </box>
     </ThemeProvider>
   );

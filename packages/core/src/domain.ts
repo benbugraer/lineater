@@ -52,6 +52,7 @@ export interface Issue {
   readonly id: IssueId;
   readonly teamId: TeamId;
   readonly identifier: string;
+  readonly url: string;
   readonly number: number;
   readonly title: string;
   readonly description: string | null;
@@ -133,6 +134,16 @@ export interface UpdateIssueInput {
   readonly cycleId?: CycleId | null;
 }
 
+export interface IssueQuery {
+  readonly teamId?: TeamId;
+  readonly stateId?: WorkflowStateId;
+  readonly projectId?: ProjectId;
+  readonly cycleId?: CycleId;
+  readonly assigneeId?: UserId;
+  readonly priority?: number;
+  readonly labelId?: LabelId;
+}
+
 export interface Page<A> {
   readonly items: readonly A[];
   readonly endCursor: string | null;
@@ -143,6 +154,7 @@ export interface AppPreferences {
   readonly theme: string;
   readonly defaultView: "list" | "board";
   readonly autoSync: boolean;
+  readonly keybindings: Readonly<Record<string, string>>;
 }
 
 export interface AuthSession {

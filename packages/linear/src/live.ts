@@ -2,6 +2,7 @@ import {
   AuthService,
   LinearApiError,
   LinearService,
+  type IssueQuery,
   type Page,
 } from "@lineater/core";
 import {
@@ -29,7 +30,7 @@ import {
 
 const PAGE_SIZE = 50;
 
-const mapError = (cause: unknown): LinearApiError => {
+export const mapLinearError = (cause: unknown): LinearApiError => {
   if (cause instanceof RatelimitedLinearError) {
     const retryAt = cause.requestsResetAt ? new Date(cause.requestsResetAt) : undefined;
     return new LinearApiError({ reason: "rate-limit", message: "Linear rate limit reached. Try again after the reset time.", retryAt, cause });
@@ -48,17 +49,27 @@ const mapError = (cause: unknown): LinearApiError => {
   }
   return new LinearApiError({
     reason: "invalid-response",
-    message: cause instanceof Error ? cause.message : "Linear returned an invalid response.",
+    message: "Linear returned an invalid response.",
     cause,
   });
 };
 
-const retryRead = <A>(effect: Effect.Effect<A, LinearApiError>, attempt = 0): Effect.Effect<A, LinearApiError> =>
+export const retryLinearRead = <A>(effect: Effect.Effect<A, LinearApiError>, attempt = 0): Effect.Effect<A, LinearApiError> =>
   effect.pipe(Effect.catchAll((error) => {
     if (error.reason !== "network" || attempt >= 2) return Effect.fail(error);
     const delayMs = 250 * (2 ** attempt) + Math.floor(Math.random() * 150);
-    return Effect.sleep(`${delayMs} millis`).pipe(Effect.andThen(retryRead(effect, attempt + 1)));
+    return Effect.sleep(`${delayMs} millis`).pipe(Effect.andThen(retryLinearRead(effect, attempt + 1)));
   }));
+
+export const makeIssueFilter = (query: IssueQuery | undefined) => query ? ({
+  ...(query.teamId ? { team: { id: { eq: query.teamId } } } : {}),
+  ...(query.stateId ? { state: { id: { eq: query.stateId } } } : {}),
+  ...(query.projectId ? { project: { id: { eq: query.projectId } } } : {}),
+  ...(query.cycleId ? { cycle: { id: { eq: query.cycleId } } } : {}),
+  ...(query.assigneeId ? { assignee: { id: { eq: query.assigneeId } } } : {}),
+  ...(query.priority !== undefined ? { priority: { eq: query.priority } } : {}),
+  ...(query.labelId ? { labels: { some: { id: { eq: query.labelId } } } } : {}),
+}) : undefined;
 
 const page = <Source, Target>(connection: Connection<Source>, map: (source: Source) => Target): Page<Target> => ({
   items: connection.nodes.map(map),
@@ -73,13 +84,13 @@ export const LinearLive = Layer.effect(
 
     const requestWithToken = <A>(accessToken: string, run: (client: LinearClient) => Promise<A>) => Effect.tryPromise({
       try: () => run(new LinearClient({ accessToken, signal: AbortSignal.timeout(20_000) })),
-      catch: mapError,
+      catch: mapLinearError,
     });
     const requestWithClient = <A>(run: (client: LinearClient) => Promise<A>) => auth.accessToken.pipe(
       Effect.flatMap((accessToken) => requestWithToken(accessToken, run)),
     );
     const withClient = <A>(run: (client: LinearClient) => Promise<A>) => auth.accessToken.pipe(
-      Effect.flatMap((accessToken) => retryRead(requestWithToken(accessToken, run))),
+      Effect.flatMap((accessToken) => retryLinearRead(requestWithToken(accessToken, run))),
     );
 
     const viewer = withClient(async (client) => {
@@ -104,8 +115,17 @@ export const LinearLive = Layer.effect(
     const workflowStates = (after?: string) => withClient(async (client) =>
       page(await client.workflowStates({ first: PAGE_SIZE, after: after ?? null }), mapWorkflowState));
 
-    const issues = (after?: string) => withClient(async (client) =>
-      page(await client.issues({ first: PAGE_SIZE, after: after ?? null, orderBy: PaginationOrderBy.UpdatedAt }), mapIssue));
+    const issues = (after?: string, query?: IssueQuery) => withClient(async (client) =>
+      page(await client.issues({ first: PAGE_SIZE, after: after ?? null, orderBy: PaginationOrderBy.UpdatedAt, filter: makeIssueFilter(query) }), mapIssue));
+
+    const updatedIssues = (since: Date, after?: string) => withClient(async (client) =>
+      page(await client.issues({
+        first: PAGE_SIZE,
+        after: after ?? null,
+        includeArchived: true,
+        orderBy: PaginationOrderBy.UpdatedAt,
+        filter: { updatedAt: { gte: since.toISOString() } },
+      }), mapIssue));
 
     const projects = (after?: string) => withClient(async (client) => {
       const organization = await client.organization;
@@ -145,6 +165,7 @@ export const LinearLive = Layer.effect(
       teams,
       workflowStates,
       issues,
+      updatedIssues,
       issue: (identifier) => withClient(async (client) => {
         try {
           return mapIssue(await client.issue(identifier));

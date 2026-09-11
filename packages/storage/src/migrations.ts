@@ -3,6 +3,9 @@ import { createHash } from "node:crypto";
 import initialMigration from "../drizzle/0000_far_selene.sql" with { type: "text" };
 import viewerMigration from "../drizzle/0001_free_vampiro.sql" with { type: "text" };
 import labelTeamMigration from "../drizzle/0002_crazy_avengers.sql" with { type: "text" };
+import issueUrlMigration from "../drizzle/0003_fearless_shard.sql" with { type: "text" };
+import issueIdentityMigration from "../drizzle/0004_volatile_inertia.sql" with { type: "text" };
+import issueUrlBackfillMigration from "../drizzle/0005_issue_url_backfill.sql" with { type: "text" };
 
 interface EmbeddedMigration {
   readonly tag: string;
@@ -16,6 +19,9 @@ const migrations: readonly EmbeddedMigration[] = [
   { tag: "0000_far_selene", folderMillis: 1788978958932, sql: initialMigration },
   { tag: "0001_free_vampiro", folderMillis: 1789072031173, sql: viewerMigration },
   { tag: "0002_crazy_avengers", folderMillis: 1789082166476, sql: labelTeamMigration },
+  { tag: "0003_fearless_shard", folderMillis: 1789130915289, sql: issueUrlMigration },
+  { tag: "0004_volatile_inertia", folderMillis: 1789132584877, sql: issueIdentityMigration },
+  { tag: "0005_issue_url_backfill", folderMillis: 1789133345700, sql: issueUrlBackfillMigration },
 ];
 
 const statements = (sql: string): readonly string[] =>

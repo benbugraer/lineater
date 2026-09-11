@@ -8,7 +8,7 @@ import {
   type InitialReadModel,
   type Issue,
 } from "@lineater/core";
-import { desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { Effect, Layer } from "effect";
 import { StorageConnection, type StorageConnectionShape } from "./database";
 import {
@@ -31,10 +31,17 @@ const storageError = (operation: string, cause: unknown) => new StorageError({
   cause,
 });
 
+const currentTeamIds = (db: StorageConnectionShape["db"]): readonly string[] => {
+  const state = db.select({ workspaceId: syncState.workspaceId }).from(syncState).orderBy(desc(syncState.lastSuccessfulSync)).get();
+  if (!state) return [];
+  return db.select({ id: teams.id }).from(teams).where(eq(teams.workspaceId, state.workspaceId)).all().map(({ id }) => id);
+};
+
 const issueFromRow = (row: typeof issues.$inferSelect, labelIds: readonly string[] = []): Issue => ({
   id: row.id,
   teamId: row.teamId,
   identifier: row.identifier,
+  url: row.url,
   number: row.number,
   title: row.title,
   description: row.description,
@@ -55,6 +62,7 @@ const issueRow = (issue: Issue): typeof issues.$inferInsert => ({
   id: issue.id,
   teamId: issue.teamId,
   identifier: issue.identifier,
+  url: issue.url,
   number: issue.number,
   title: issue.title,
   description: issue.description,
@@ -75,7 +83,7 @@ const saveIssue = (db: StorageConnectionShape["db"], issue: Issue): void => {
     tx.insert(issues).values(issueRow(issue)).onConflictDoUpdate({
       target: issues.id,
       set: {
-        teamId: issue.teamId, identifier: issue.identifier, number: issue.number, title: issue.title,
+        teamId: issue.teamId, identifier: issue.identifier, url: issue.url, number: issue.number, title: issue.title,
         description: issue.description, priority: issue.priority, stateId: issue.stateId, assigneeId: issue.assigneeId,
         projectId: issue.projectId, cycleId: issue.cycleId, sortOrder: issue.sortOrder, completedAt: issue.completedAt,
         canceledAt: issue.canceledAt, updatedAt: issue.updatedAt,
@@ -165,6 +173,7 @@ const saveInitial = (
         endsAt: sql`excluded.ends_at`, updatedAt: sql`excluded.updated_at`,
       },
     }).run();
+    const teamIds = model.teams.map(({ id }) => id);
     const userIds = new Set(allUsers.map(({ id }) => id));
     const projectIds = new Set(model.projects.map(({ id }) => id));
     const cycleIds = new Set(model.cycles.map(({ id }) => id));
@@ -174,10 +183,17 @@ const saveInitial = (
       projectId: issue.projectId && projectIds.has(issue.projectId) ? issue.projectId : null,
       cycleId: issue.cycleId && cycleIds.has(issue.cycleId) ? issue.cycleId : null,
     }));
+    if (teamIds.length > 0) {
+      const freshIssueIds = safeIssues.map(({ id }) => id);
+      const staleScope = freshIssueIds.length > 0
+        ? and(inArray(issues.teamId, teamIds), notInArray(issues.id, freshIssueIds))
+        : inArray(issues.teamId, teamIds);
+      if (staleScope) tx.delete(issues).where(staleScope).run();
+    }
     if (safeIssues.length > 0) tx.insert(issues).values(safeIssues.map(issueRow)).onConflictDoUpdate({
       target: issues.id,
       set: {
-        teamId: sql`excluded.team_id`, identifier: sql`excluded.identifier`, number: sql`excluded.number`, title: sql`excluded.title`,
+        teamId: sql`excluded.team_id`, identifier: sql`excluded.identifier`, url: sql`excluded.url`, number: sql`excluded.number`, title: sql`excluded.title`,
         description: sql`excluded.description`, priority: sql`excluded.priority`, stateId: sql`excluded.state_id`, assigneeId: sql`excluded.assignee_id`,
         projectId: sql`excluded.project_id`, cycleId: sql`excluded.cycle_id`, sortOrder: sql`excluded.sort_order`, completedAt: sql`excluded.completed_at`,
         canceledAt: sql`excluded.canceled_at`, updatedAt: sql`excluded.updated_at`,
@@ -192,6 +208,7 @@ const saveInitial = (
         .map((labelId) => ({ issueId: issue.id, labelId })));
       if (relations.length > 0) tx.insert(issueLabels).values(relations).run();
     }
+    tx.delete(syncState).where(ne(syncState.workspaceId, model.workspace.id)).run();
     tx.insert(syncState).values({
       workspaceId: model.workspace.id,
       viewerId: model.viewer.id,
@@ -202,6 +219,47 @@ const saveInitial = (
       target: syncState.workspaceId,
       set: { viewerId: model.viewer.id, lastSuccessfulSync: model.syncedAt, updatedAtThreshold: model.syncedAt, cursor: null },
     }).run();
+  });
+};
+
+const mergeIssueDelta = (
+  db: StorageConnectionShape["db"],
+  changedIssues: readonly Issue[],
+  syncedAt: Date,
+): void => {
+  db.transaction((tx) => {
+    const userIds = new Set(tx.select({ id: users.id }).from(users).all().map(({ id }) => id));
+    const projectIds = new Set(tx.select({ id: projects.id }).from(projects).all().map(({ id }) => id));
+    const cycleIds = new Set(tx.select({ id: cycles.id }).from(cycles).all().map(({ id }) => id));
+    const labelIds = new Set(tx.select({ id: labels.id }).from(labels).all().map(({ id }) => id));
+
+    for (const issue of changedIssues) {
+      const safeIssue = {
+        ...issue,
+        assigneeId: issue.assigneeId && userIds.has(issue.assigneeId) ? issue.assigneeId : null,
+        projectId: issue.projectId && projectIds.has(issue.projectId) ? issue.projectId : null,
+        cycleId: issue.cycleId && cycleIds.has(issue.cycleId) ? issue.cycleId : null,
+      };
+      tx.insert(issues).values(issueRow(safeIssue)).onConflictDoUpdate({
+        target: issues.id,
+        set: {
+          teamId: safeIssue.teamId, identifier: safeIssue.identifier, url: safeIssue.url, number: safeIssue.number,
+          title: safeIssue.title, description: safeIssue.description, priority: safeIssue.priority, stateId: safeIssue.stateId,
+          assigneeId: safeIssue.assigneeId, projectId: safeIssue.projectId, cycleId: safeIssue.cycleId,
+          sortOrder: safeIssue.sortOrder, completedAt: safeIssue.completedAt, canceledAt: safeIssue.canceledAt,
+          updatedAt: safeIssue.updatedAt,
+        },
+      }).run();
+      tx.delete(issueLabels).where(eq(issueLabels.issueId, safeIssue.id)).run();
+      const relations = safeIssue.labelIds.filter((labelId) => labelIds.has(labelId)).map((labelId) => ({ issueId: safeIssue.id, labelId }));
+      if (relations.length > 0) tx.insert(issueLabels).values(relations).run();
+    }
+
+    const currentState = tx.select({ workspaceId: syncState.workspaceId }).from(syncState).get();
+    if (currentState) {
+      tx.update(syncState).set({ lastSuccessfulSync: syncedAt, updatedAtThreshold: syncedAt, cursor: null })
+        .where(eq(syncState.workspaceId, currentState.workspaceId)).run();
+    }
   });
 };
 
@@ -275,12 +333,19 @@ export const RepositoryLive = Layer.mergeAll(
     const { db } = yield* StorageConnection;
     return {
       count: Effect.try({
-        try: () => db.select({ value: sql<number>`count(*)` }).from(issues).get()?.value ?? 0,
+        try: () => {
+          const teamIds = currentTeamIds(db);
+          return teamIds.length > 0
+            ? db.select({ value: sql<number>`count(*)` }).from(issues).where(inArray(issues.teamId, teamIds)).get()?.value ?? 0
+            : 0;
+        },
         catch: (cause) => storageError("count-issues", cause),
       }),
       findByIdentifier: (identifier) => Effect.try({
         try: () => {
-          const row = db.select().from(issues).where(eq(issues.identifier, identifier)).get();
+          const teamIds = currentTeamIds(db);
+          if (teamIds.length === 0) return null;
+          const row = db.select().from(issues).where(and(eq(issues.identifier, identifier), inArray(issues.teamId, teamIds))).get();
           if (!row) return null;
           const relations = db.select().from(issueLabels).where(eq(issueLabels.issueId, row.id)).all();
           return issueFromRow(row, relations.map(({ labelId }) => labelId));
@@ -288,10 +353,14 @@ export const RepositoryLive = Layer.mergeAll(
         catch: (cause) => storageError("find-issue", cause),
       }),
       list: (limit) => Effect.try({
-        try: () => db.select().from(issues).orderBy(desc(issues.updatedAt)).limit(limit).all().map((row) => {
-          const relations = db.select().from(issueLabels).where(eq(issueLabels.issueId, row.id)).all();
-          return issueFromRow(row, relations.map(({ labelId }) => labelId));
-        }),
+        try: () => {
+          const teamIds = currentTeamIds(db);
+          if (teamIds.length === 0) return [];
+          return db.select().from(issues).where(inArray(issues.teamId, teamIds)).orderBy(desc(issues.updatedAt)).limit(limit).all().map((row) => {
+            const relations = db.select().from(issueLabels).where(eq(issueLabels.issueId, row.id)).all();
+            return issueFromRow(row, relations.map(({ labelId }) => labelId));
+          });
+        },
         catch: (cause) => storageError("list-issues", cause),
       }),
       save: (issue) => Effect.try({
@@ -314,6 +383,10 @@ export const RepositoryLive = Layer.mergeAll(
       saveInitialReadModel: (model) => Effect.try({
         try: () => saveInitial(db, model),
         catch: (cause) => storageError("save-initial-read-model", cause),
+      }),
+      mergeIssues: (changedIssues, syncedAt) => Effect.try({
+        try: () => mergeIssueDelta(db, changedIssues, syncedAt),
+        catch: (cause) => storageError("merge-issue-delta", cause),
       }),
       loadInitialReadModel: Effect.try({
         try: () => loadInitial(db),

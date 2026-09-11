@@ -12,11 +12,13 @@
     "dev": "bun run apps/lineater/src/main.ts",
     "start": "bun run apps/lineater/src/main.ts",
     "build": "bun build apps/lineater/src/main.ts --compile --minify --outfile dist/lineater",
+    "build:web": "bun run --cwd apps/web build",
     "build:release": "./scripts/build-release.sh",
     "lint": "bunx biome lint",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json",
     "test": "bun test",
     "test:installer": "./scripts/install.test.sh",
+    "profile:startup": "bun scripts/profile-startup.ts",
     "db:generate": "bunx drizzle-kit generate --config packages/storage/drizzle.config.ts",
     "db:studio": "bunx drizzle-kit studio --config packages/storage/drizzle.config.ts"
   },
@@ -28,6 +30,10 @@
     "@types/react": "^19.2.18",
     "drizzle-kit": "^0.31.10",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "esbuild": "0.28.2",
+    "toml": "4.2.0"
   },
   "dependencies": {
     "@effect/cli": "^0.77.1",

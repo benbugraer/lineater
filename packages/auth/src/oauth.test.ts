@@ -68,7 +68,7 @@ describe("Linear OAuth PKCE", () => {
     const ConfigTest = Layer.succeed(ConfigService, {
       paths: { configDirectory: "/tmp", dataDirectory: "/tmp", stateDirectory: "/tmp", configPath: "/tmp/config.json", databasePath: "/tmp/test.db", logPath: "/tmp/test.log" },
       oauth: { clientId: "test-client", redirectUri, scopes: ["read", "write"], callbackTimeoutMs: 2_000 },
-      preferences: { theme: "linear", defaultView: "list", autoSync: true },
+      preferences: { theme: "linear", defaultView: "list", autoSync: true, keybindings: {} },
     });
     const BrowserTest = Layer.succeed(BrowserService, {
       open: (url) => Effect.promise(async () => {
@@ -95,7 +95,7 @@ describe("Linear OAuth PKCE", () => {
         const session = yield* auth.login;
         yield* Effect.sync(() => {
           const stored = secrets.get("oauth-session") ?? "";
-          secrets.set("oauth-session", stored.replace(/"expiresAt":\d+/, '"expiresAt":0'));
+          secrets.set("oauth-session", stored.replace(/"expiresAt":\d+/, '"expiresAt":1'));
         });
         const refreshedAccessToken = yield* auth.accessToken;
         return { session, refreshedAccessToken };
@@ -121,16 +121,14 @@ describe("Linear OAuth PKCE", () => {
     await expect(fetch(redirectUri)).rejects.toThrow();
   });
 
-  test("rejects a callback with mismatched state", async () => {
+  test("rejects mismatched state without letting an unauthenticated request cancel the real callback", async () => {
     const redirectUri = new URL("http://127.0.0.1:45992/oauth/callback");
     const callback = Effect.runPromise(waitForCallback(redirectUri, "expected-state", 2_000));
-    const outcome = callback.then(
-      () => "resolved",
-      (error: unknown) => error,
-    );
     await Bun.sleep(30);
-    const response = await fetch("http://127.0.0.1:45992/oauth/callback?code=authorization-code&state=attacker-state");
-    expect(response.status).toBe(400);
-    expect(String(await outcome)).toContain("OAuth state mismatch");
+    const rejected = await fetch("http://127.0.0.1:45992/oauth/callback?code=attacker-code&state=attacker-state");
+    expect(rejected.status).toBe(400);
+    const accepted = await fetch("http://127.0.0.1:45992/oauth/callback?code=authorization-code&state=expected-state");
+    expect(accepted.status).toBe(200);
+    expect(await callback).toEqual({ code: "authorization-code" });
   });
 });

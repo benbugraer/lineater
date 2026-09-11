@@ -26,6 +26,7 @@ interface WorkspaceScreenProps {
   readonly selectedColumnIndex: number;
   readonly detailOpen: boolean;
   readonly query: string;
+  readonly activeFilterCount: number;
   readonly syncing: boolean;
   readonly cachedOnly: boolean;
   readonly mutationIssueId: string | null;
@@ -207,7 +208,7 @@ function IssueDetail({ model, issue, active, compact, comments, commentsLoading 
         })}
       </scrollbox>
       <box height={3} paddingLeft={3} alignItems="center" border={["top"]} borderColor={theme.palette.border}>
-        <text fg={theme.palette.subtle}>{compact ? "esc back · " : ""}<span fg={theme.palette.textSecondary}>e</span> edit  <span fg={theme.palette.textSecondary}>c</span> comment  <span fg={theme.palette.textSecondary}>s</span> status  <span fg={theme.palette.textSecondary}>a/p/t</span> metadata</text>
+        <text fg={theme.palette.subtle}>{compact ? "esc back · " : ""}<span fg={theme.palette.textSecondary}>e</span> edit  <span fg={theme.palette.textSecondary}>c</span> comment  <span fg={theme.palette.textSecondary}>s</span> status  <span fg={theme.palette.textSecondary}>a/p/t</span> metadata  <span fg={theme.palette.textSecondary}>y/o</span> copy/open</text>
       </box>
     </box>
   );
@@ -298,7 +299,7 @@ export function WorkspaceScreen(props: WorkspaceScreenProps) {
   const theme = useTheme();
   const {
     model, layout, view, activePane, navigation, selectedNavigationIndex, issues,
-    selectedIssue, selectedIssueIndex, selectedColumnIndex, detailOpen, query,
+    selectedIssue, selectedIssueIndex, selectedColumnIndex, detailOpen, query, activeFilterCount,
     syncing, cachedOnly, mutationIssueId, notice, comments, commentsLoading,
   } = props;
   const showSidebar = layout === "wide";
@@ -315,6 +316,7 @@ export function WorkspaceScreen(props: WorkspaceScreenProps) {
         <box width={3} />
         <text fg={theme.palette.subtle}>{view === "board" ? "Board" : "Issues"}</text>
         {query ? <text fg={theme.palette.accentBright}>  / {query}</text> : null}
+        {activeFilterCount > 0 ? <text fg={theme.palette.accentText}>  ◆ {activeFilterCount} filters</text> : null}
         <box flexGrow={1} />
         {mutationIssueId ? <text fg={theme.palette.warning}>UPDATING  </text> : null}
         <text fg={syncing || cachedOnly || notice?.tone === "error" ? theme.palette.warning : theme.palette.success}>{syncing ? "SYNCING…" : cachedOnly || notice?.tone === "error" ? "● CACHE" : "● SYNCED"}</text>
@@ -336,9 +338,9 @@ export function WorkspaceScreen(props: WorkspaceScreenProps) {
 
       <box height={3} paddingLeft={2} paddingRight={2} backgroundColor={theme.palette.panel} border={["top"]} borderColor={theme.palette.border} flexDirection="row" alignItems="center">
         {notice ? <text fg={notice.tone === "error" ? theme.palette.error : theme.palette.accentBright}>{noticeText}</text> : layout === "single" ? (
-          <text fg={theme.palette.muted}><span fg={theme.palette.textSecondary}>j/k</span> move  <span fg={theme.palette.textSecondary}>n</span> new  <span fg={theme.palette.textSecondary}>b</span> board  <span fg={theme.palette.textSecondary}>S/,</span> settings  <span fg={theme.palette.textSecondary}>?</span> help</text>
+          <text fg={theme.palette.muted}><span fg={theme.palette.textSecondary}>j/k</span> move  <span fg={theme.palette.textSecondary}>n</span> new  <span fg={theme.palette.textSecondary}>b</span> board  <span fg={theme.palette.textSecondary}>f</span> filter  <span fg={theme.palette.textSecondary}>S/,</span> settings  <span fg={theme.palette.textSecondary}>?</span> help</text>
         ) : (
-          <text fg={theme.palette.muted}><span fg={theme.palette.textSecondary}>j/k</span> navigate   <span fg={theme.palette.textSecondary}>n</span> new   <span fg={theme.palette.textSecondary}>e</span> edit   <span fg={theme.palette.textSecondary}>b</span> {view === "board" ? "list" : "board"}   <span fg={theme.palette.textSecondary}>S/,</span> settings   <span fg={theme.palette.textSecondary}>?</span> help</text>
+          <text fg={theme.palette.muted}><span fg={theme.palette.textSecondary}>j/k</span> navigate   <span fg={theme.palette.textSecondary}>n</span> new   <span fg={theme.palette.textSecondary}>e</span> edit   <span fg={theme.palette.textSecondary}>b</span> {view === "board" ? "list" : "board"}   <span fg={theme.palette.textSecondary}>f</span> filter   <span fg={theme.palette.textSecondary}>S/,</span> settings   <span fg={theme.palette.textSecondary}>?</span> help</text>
         )}
         <box flexGrow={1} />
         {layout === "single" ? null : <text fg={theme.palette.subtle}>{model.workspace.name} · {model.viewer.displayName}</text>}

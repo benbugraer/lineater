@@ -16,7 +16,7 @@ export type WorkspaceSource = Pick<Organization, "id" | "name" | "urlKey" | "cre
 export type UserSource = Pick<User, "id" | "name" | "displayName" | "email" | "avatarUrl" | "active" | "createdAt" | "updatedAt">;
 export type TeamSource = Pick<Team, "id" | "key" | "name" | "createdAt" | "updatedAt">;
 export type WorkflowStateSource = Pick<WorkflowState, "id" | "teamId" | "name" | "type" | "color" | "position" | "createdAt" | "updatedAt">;
-export type IssueSource = Pick<Issue, "id" | "teamId" | "identifier" | "number" | "title" | "description" | "priority" | "stateId" | "assigneeId" | "projectId" | "cycleId" | "labelIds" | "sortOrder" | "completedAt" | "canceledAt" | "createdAt" | "updatedAt">;
+export type IssueSource = Pick<Issue, "id" | "teamId" | "identifier" | "url" | "number" | "title" | "description" | "priority" | "stateId" | "assigneeId" | "projectId" | "cycleId" | "labelIds" | "sortOrder" | "completedAt" | "canceledAt" | "createdAt" | "updatedAt">;
 export type LabelSource = Pick<IssueLabel, "id" | "teamId" | "name" | "color" | "createdAt" | "updatedAt">;
 export type ProjectSource = Pick<Project, "id" | "name" | "description" | "state" | "startDate" | "targetDate" | "createdAt" | "updatedAt">;
 export type CycleSource = Pick<Cycle, "id" | "teamId" | "number" | "name" | "startsAt" | "endsAt" | "createdAt" | "updatedAt">;
@@ -82,6 +82,7 @@ export const mapIssue = (issue: IssueSource): DomainIssue => ({
   id: issue.id,
   teamId: requiredRelationId(`Issue ${issue.identifier}`, "team", issue.teamId),
   identifier: issue.identifier,
+  url: issue.url,
   number: issue.number,
   title: issue.title,
   description: issue.description ?? null,

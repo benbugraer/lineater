@@ -104,8 +104,9 @@ export const waitForCallback = (
 
         const state = url.searchParams.get("state");
         const oauthError = url.searchParams.get("error");
-        if (!state || !stateMatches(expectedState, state)) {
-          finish(Effect.fail(authError("callback", "OAuth state mismatch; the callback was rejected")), true);
+        if (!state || state.length > 512 || !stateMatches(expectedState, state)) {
+          // Do not settle the listener: browser prefetches or an unauthenticated local
+          // request must not be able to cancel the user's real OAuth callback.
           return callbackPage("error", "The request could not be verified. Return to the terminal and try again.");
         }
         if (oauthError) {
@@ -136,18 +137,22 @@ export const waitForCallback = (
 });
 
 const parseScopes = (scope: unknown): readonly string[] => {
-  if (typeof scope === "string") return scope.split(/[ ,]+/).filter(Boolean);
-  if (Array.isArray(scope) && scope.every((item) => typeof item === "string")) return scope;
-  throw new Error("Token response has an invalid scope value");
+  const scopes = typeof scope === "string"
+    ? scope.split(/[ ,]+/).filter(Boolean)
+    : Array.isArray(scope) && scope.every((item) => typeof item === "string") ? scope : null;
+  if (!scopes || scopes.length > 32 || scopes.some((item) => item.length > 128)) {
+    throw new Error("Token response has an invalid scope value");
+  }
+  return scopes;
 };
 
 const parseTokenResponse = (value: unknown): TokenBundle => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Invalid token response");
   const record = Object.fromEntries(Object.entries(value));
-  if (typeof record.access_token !== "string" || record.access_token.length < 16) throw new Error("Token response is missing access_token");
-  if (typeof record.refresh_token !== "string" || record.refresh_token.length < 16) throw new Error("Token response is missing refresh_token");
+  if (typeof record.access_token !== "string" || record.access_token.length < 16 || record.access_token.length > 16_384) throw new Error("Token response is missing access_token");
+  if (typeof record.refresh_token !== "string" || record.refresh_token.length < 16 || record.refresh_token.length > 16_384) throw new Error("Token response is missing refresh_token");
   if (record.token_type !== "Bearer") throw new Error("Token response has an unsupported token_type");
-  if (typeof record.expires_in !== "number" || !Number.isFinite(record.expires_in) || record.expires_in <= 0) throw new Error("Token response has an invalid expires_in");
+  if (typeof record.expires_in !== "number" || !Number.isFinite(record.expires_in) || record.expires_in <= 0 || record.expires_in > 31_536_000) throw new Error("Token response has an invalid expires_in");
 
   return {
     accessToken: record.access_token,
@@ -194,10 +199,16 @@ const validateGrantedScopes = (token: TokenBundle, requested: readonly string[])
 
 const serializeToken = (token: TokenBundle): string => JSON.stringify(token);
 const parseStoredToken = (value: string): TokenBundle => {
+  if (value.length > 65_536) throw new Error("Stored credential exceeds the size limit");
   const parsed: unknown = JSON.parse(value);
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error("Stored credential is invalid");
   const record = Object.fromEntries(Object.entries(parsed));
-  if (typeof record.accessToken !== "string" || typeof record.refreshToken !== "string" || record.tokenType !== "Bearer" || typeof record.expiresAt !== "number") {
+  if (
+    typeof record.accessToken !== "string" || record.accessToken.length < 16 || record.accessToken.length > 16_384
+    || typeof record.refreshToken !== "string" || record.refreshToken.length < 16 || record.refreshToken.length > 16_384
+    || record.tokenType !== "Bearer"
+    || typeof record.expiresAt !== "number" || !Number.isFinite(record.expiresAt) || record.expiresAt <= 0
+  ) {
     throw new Error("Stored credential is incomplete");
   }
   return {

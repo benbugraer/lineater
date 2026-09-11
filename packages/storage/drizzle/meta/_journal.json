@@ -22,6 +22,27 @@
       "when": 1789082166476,
       "tag": "0002_crazy_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789130915289,
+      "tag": "0003_fearless_shard",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789132584877,
+      "tag": "0004_volatile_inertia",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789133345700,
+      "tag": "0005_issue_url_backfill",
+      "breakpoints": true
     }
   ]
 }

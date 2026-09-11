@@ -1,0 +1,1 @@
+ALTER TABLE `issues` ADD `url` text DEFAULT '' NOT NULL;

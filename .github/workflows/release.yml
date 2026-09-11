@@ -43,8 +43,16 @@ jobs:
             exit 1
           }
 
-      - name: Typecheck
-        run: bun run typecheck
+      - name: Audit dependencies
+        run: bun audit
+
+      - name: Lint and typecheck
+        run: |
+          bun run lint
+          bun run typecheck
+
+      - name: Build website
+        run: bun run build:web
 
       - name: Test
         run: bun test

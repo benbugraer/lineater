@@ -10,7 +10,7 @@ Linux and macOS (x64 and arm64):
 curl -fsSL https://raw.githubusercontent.com/benbugraer/lineater/master/scripts/install.sh | sh
 ```
 
-The installer downloads the correct standalone executable, verifies its SHA-256 checksum, and installs it to `~/.local/bin/lineater`. Bun and Node.js are not required. See [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) for version pinning, custom install directories, release operations, and uninstallation.
+The installer downloads the correct standalone executable, verifies its SHA-256 checksum, and installs it to `~/.local/bin/lineater`. Bun and Node.js are not required. See [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) for release operations and [`docs/SECURITY.md`](docs/SECURITY.md) for the threat model and release security checklist.
 
 Open Lineater after installation:
 
@@ -58,7 +58,7 @@ export LINEATER_LINEAR_CLIENT_ID="your-client-id"
 bun run dev
 ```
 
-You can instead create `~/.config/lineater/config.json` with `linearClientId`, `linearRedirectUri`, and `linearScopes`. The same non-sensitive file stores TUI preferences (`theme`, `defaultView`, and `autoSync`) selected from the settings screen. The default scopes are `read` and `write`; Lineater rejects `admin` and unknown scopes.
+You can instead create `~/.config/lineater/config.json` with `linearClientId`, `linearRedirectUri`, and `linearScopes`. The same non-sensitive file stores TUI preferences (`theme`, `defaultView`, `autoSync`, and named-command `keybindings`) selected from settings or edited directly. Plaintext token/secret keys and symbolic-link config targets are rejected. The default scopes are `read` and `write`; Lineater rejects `admin` and unknown scopes.
 
 The primary login path is the TUI authorization screen; `lineater auth login` remains available for scripts and diagnostics. Login uses Authorization Code + PKCE (`S256`) and a cryptographically random `state`. The callback binds only to the configured loopback address, expires after five minutes, and accepts one matching callback. Access and rotating refresh tokens are stored only through `Bun.secrets` in macOS Keychain, Linux Secret Service, or Windows Credential Manager. There is deliberately no plaintext fallback.
 
@@ -76,12 +76,12 @@ s / a / p   status / assignee / priority
 t           labels
 P / C       project / cycle
 /           search cached issues
-f           cycle team filter
+f           team/state/project/cycle/assignee/priority/label filters
+y / o       copy identifier / open issue in Linear
 :           command palette
 S / ,       settings and themes
 ?           help overlay
 b           list / board
-s           choose issue status
 H / L       move issue across workflow states
 Ctrl+E      edit long descriptions/comments in $EDITOR
 Ctrl+S      save issue/comment composer
@@ -89,7 +89,22 @@ r           refresh from Linear
 q           quit
 ```
 
+Named normal-mode commands can be overridden without changing source code, for example:
+
+```json
+{
+  "keybindings": {
+    "app.settings": "ctrl+,",
+    "issue.copyIdentifier": "ctrl+y"
+  }
+}
+```
+
+`Ctrl+C` remains an emergency quit binding. Invalid/unknown commands are ignored rather than executed.
+
 The default appearance is Linear Dark. Settings include Linear Light, all four Catppuccin flavors (Latte, Frappé, Macchiato, Mocha), Tokyo Night, Nord, and Solarized Light. Changes preview immediately and persist atomically with `0600` permissions.
+
+Issue filters compose over cached TUI data and map to Linear relation comparators in CLI queries; `x` clears the filter panel. Startup renders the last SQLite snapshot immediately, then performs cursor-paginated incremental issue sync with a two-minute overlap. Manual `r` performs a complete read-model reconciliation, including removal of stale/deleted cached issues.
 
 Kanban columns come from each team's Linear workflow-state order; no status names or IDs are hardcoded. `H`/`L` applies an optimistic local move and rolls both UI and SQLite back if Linear rejects the mutation.
 
@@ -102,10 +117,11 @@ bun run dev sync
 bun run dev viewer
 bun run dev teams --json
 bun run dev states --json
-bun run dev issues --json
+bun run dev issues --team TEAM_UUID --state STATE_UUID --priority 2 --label LABEL_UUID --json
 bun run dev create "Issue title" --team TEAM_UUID --priority 2 --json
 bun run dev update ENG-123 --title "Updated title" --assignee none --json
-bun run dev issues --offline --json
+bun run dev comment ENG-123 "Markdown comment" --json
+bun run dev issues --offline --priority 2 --json
 bun run dev issue ENG-123 --json
 bun run dev issue ENG-123 --offline --json
 bun run dev projects --json
@@ -120,6 +136,8 @@ bun run typecheck
 bun test
 bun run test:installer
 bun run build
+bun run build:web
+bun run profile:startup
 ```
 
 Generate a migration after changing `packages/storage/src/schema.ts`:

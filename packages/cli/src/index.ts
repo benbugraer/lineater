@@ -1,13 +1,16 @@
 import { Args, Command, Options } from "@effect/cli";
 import {
-  IssueRepository,
+  type IssueQuery,
   LinearService,
   LogService,
   TuiService,
+  addIssueComment,
   authenticate,
   createIssue as createIssueUseCase,
   getAuthSession,
+  getIssue,
   getStartupStatus,
+  listIssues,
   logout,
   syncInitialReadModel,
   updateIssue as updateIssueUseCase,
@@ -105,13 +108,31 @@ const makeListCommand = <A>(
   yield* print(json ? result.items : result.items.map(format).join("\n"), json);
 })).pipe(Command.withDescription(description));
 
+const issueTeamFilter = Options.text("team").pipe(Options.optional, Options.withDescription("Filter by Linear team UUID."));
+const issueStateFilter = Options.text("state").pipe(Options.optional, Options.withDescription("Filter by workflow-state UUID."));
+const issueProjectFilter = Options.text("project").pipe(Options.optional, Options.withDescription("Filter by project UUID."));
+const issueCycleFilter = Options.text("cycle").pipe(Options.optional, Options.withDescription("Filter by cycle UUID."));
+const issueAssigneeFilter = Options.text("assignee").pipe(Options.optional, Options.withDescription("Filter by assignee UUID."));
+const issuePriorityFilter = Options.integer("priority").pipe(Options.optional, Options.withDescription("Filter by priority 0–4."));
+const issueLabelFilter = Options.text("label").pipe(Options.optional, Options.withDescription("Filter by label UUID."));
+
 const teams = makeListCommand("teams", "List the first page of accessible teams.", (linear) => linear.teams(), (team) => `${team.key}\t${team.name}`);
-const issues = Command.make("issues", { json, offline }, ({ json, offline }) => Effect.gen(function* () {
-  const items = offline
-    ? yield* IssueRepository.pipe(Effect.flatMap((repository) => repository.list(50)))
-    : (yield* LinearService.pipe(Effect.flatMap((linear) => linear.issues()))).items;
-  yield* print(json ? items : items.map((issue) => `${issue.identifier}\t${issue.title}`).join("\n"), json);
-})).pipe(Command.withDescription("List recently updated issues from Linear or the explicit offline cache."));
+const issues = Command.make("issues", {
+  json, offline, team: issueTeamFilter, state: issueStateFilter, project: issueProjectFilter,
+  cycle: issueCycleFilter, assignee: issueAssigneeFilter, priority: issuePriorityFilter, label: issueLabelFilter,
+}, (input) => Effect.gen(function* () {
+  const query: IssueQuery = {
+    teamId: Option.getOrUndefined(input.team),
+    stateId: Option.getOrUndefined(input.state),
+    projectId: Option.getOrUndefined(input.project),
+    cycleId: Option.getOrUndefined(input.cycle),
+    assigneeId: Option.getOrUndefined(input.assignee),
+    priority: Option.getOrUndefined(input.priority),
+    labelId: Option.getOrUndefined(input.label),
+  };
+  const items = yield* listIssues(query, { offline: input.offline, limit: 500 });
+  yield* print(input.json ? items : items.map((issue) => `${issue.identifier}\t${issue.title}`).join("\n"), input.json);
+})).pipe(Command.withDescription("List filtered, recently updated issues from Linear or the explicit offline cache."));
 const projects = makeListCommand("projects", "List recently updated projects.", (linear) => linear.projects(), (project) => `${project.state}\t${project.name}`);
 const cycles = makeListCommand("cycles", "List recently updated cycles.", (linear) => linear.cycles(), (cycle) => `${cycle.number}\t${cycle.name ?? `Cycle ${cycle.number}`}`);
 const states = makeListCommand("states", "List accessible workflow states.", (linear) => linear.workflowStates(), (state) => `${state.type}\t${state.name}`);
@@ -158,8 +179,7 @@ const update = Command.make("update", {
   cycle: cycleOption,
   json,
 }, (input) => Effect.gen(function* () {
-  const linear = yield* LinearService;
-  const original = yield* linear.issue(input.identifier.toUpperCase());
+  const original = yield* getIssue(input.identifier, false);
   if (!original) return yield* Effect.fail(new Error(`Issue ${input.identifier} was not found.`));
   const updated = yield* updateIssueUseCase(original, {
     title: Option.getOrUndefined(input.title),
@@ -174,11 +194,16 @@ const update = Command.make("update", {
   yield* print(input.json ? updated : `${updated.identifier} · ${updated.title}`, input.json);
 })).pipe(Command.withDescription("Update issue fields. Use 'none' to clear assignee, project, or cycle."));
 
+const commentBody = Args.text({ name: "body" }).pipe(Args.withDescription("Markdown comment body."));
+const comment = Command.make("comment", { identifier: issueIdentifier, body: commentBody, json }, (input) => Effect.gen(function* () {
+  const target = yield* getIssue(input.identifier, false);
+  if (!target) return yield* Effect.fail(new Error(`Issue ${input.identifier} was not found.`));
+  const created = yield* addIssueComment(target.id, input.body);
+  yield* print(input.json ? created : `Comment added to ${target.identifier}.`, input.json);
+})).pipe(Command.withDescription("Add a Markdown comment using the same mutation use case as the TUI."));
+
 const issue = Command.make("issue", { identifier: issueIdentifier, json, offline }, ({ identifier, json, offline }) => Effect.gen(function* () {
-  const normalizedIdentifier = identifier.toUpperCase();
-  const result = offline
-    ? yield* IssueRepository.pipe(Effect.flatMap((repository) => repository.findByIdentifier(normalizedIdentifier)))
-    : yield* LinearService.pipe(Effect.flatMap((linear) => linear.issue(normalizedIdentifier)));
+  const result = yield* getIssue(identifier, offline);
   if (!result) {
     yield* Console.error(`Issue ${identifier} was not found.`);
     return;
@@ -187,5 +212,5 @@ const issue = Command.make("issue", { identifier: issueIdentifier, json, offline
 })).pipe(Command.withDescription("Fetch one issue by identifier."));
 
 export const lineaterCommand = root.pipe(
-  Command.withSubcommands([auth, sync, viewer, teams, states, issues, issue, create, update, projects, cycles]),
+  Command.withSubcommands([auth, sync, viewer, teams, states, issues, issue, create, update, comment, projects, cycles]),
 );

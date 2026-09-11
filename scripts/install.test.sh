@@ -54,6 +54,26 @@ if LINEATER_DOWNLOAD_BASE="file://$TEST_DIR/release" \
 fi
 [ ! -e "$TEST_DIR/rejected/lineater" ] || { printf 'invalid artifact was installed\n' >&2; exit 1; }
 
+printf 'unexpected\n' > "$TEST_DIR/release/payload/extra-file"
+tar -C "$TEST_DIR/release/payload" -czf "$TEST_DIR/release/lineater-linux-x64.tar.gz" lineater extra-file
+(
+  cd "$TEST_DIR/release"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum lineater-linux-x64.tar.gz > checksums.txt
+  else
+    shasum -a 256 lineater-linux-x64.tar.gz > checksums.txt
+  fi
+)
+if LINEATER_DOWNLOAD_BASE="file://$TEST_DIR/release" \
+  LINEATER_INSTALL_DIR="$TEST_DIR/rejected-archive" \
+  LINEATER_OS="linux" \
+  LINEATER_ARCH="x64" \
+  sh "$ROOT_DIR/scripts/install.sh" >/dev/null 2>&1; then
+  printf 'installer accepted an archive with unexpected entries\n' >&2
+  exit 1
+fi
+[ ! -e "$TEST_DIR/rejected-archive/lineater" ] || { printf 'unexpected archive was installed\n' >&2; exit 1; }
+
 if LINEATER_DOWNLOAD_BASE="file://$TEST_DIR/release" \
   LINEATER_INSTALL_DIR="$TEST_DIR/rejected-arch" \
   LINEATER_OS="linux" \

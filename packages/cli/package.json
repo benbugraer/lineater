@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
+  "devDependencies": {
+    "@lineater/testkit": "workspace:*"
+  },
   "dependencies": {
     "@effect/cli": "^0.77.1",
     "@lineater/core": "workspace:*",

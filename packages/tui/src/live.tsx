@@ -2,7 +2,10 @@
 import {
   addIssueComment,
   type AuthService,
+  type BrowserService,
+  type ClipboardService,
   type CommentRepository,
+  copyIssueIdentifier,
   type IssueRepository,
   type LinearService,
   loadPreferences,
@@ -15,7 +18,9 @@ import {
   createIssue,
   loadIssueComments,
   loadTuiBootstrap,
+  openIssueInBrowser,
   savePreferences,
+  syncIncrementalReadModel,
   syncInitialReadModel,
   updateIssue,
   type StartupStatus,
@@ -30,7 +35,7 @@ import type { TuiController } from "./controller";
 import { editWithExternalEditor } from "./editor";
 import { LineaterApp } from "./LineaterApp";
 
-type TuiEnvironment = AuthService | CommentRepository | IssueRepository | LinearService | PreferencesService | ReadModelRepository;
+type TuiEnvironment = AuthService | BrowserService | ClipboardService | CommentRepository | IssueRepository | LinearService | PreferencesService | ReadModelRepository;
 
 export const runTuiRenderer = (controller: TuiController): Effect.Effect<void, TuiError> =>
   Effect.async<void, TuiError>((resume) => {
@@ -110,11 +115,14 @@ export const TuiLive = Layer.effect(TuiService, Effect.gen(function* () {
     savePreferences: (preferences) => run(savePreferences(preferences)),
     authorize: () => run(authenticate.pipe(Effect.andThen(syncInitialReadModel))),
     sync: () => run(syncInitialReadModel),
+    syncIncremental: () => run(syncIncrementalReadModel),
     createIssue: (input) => run(createIssue(input)),
     updateIssue: (issue, input) => run(updateIssue(issue, input)),
     loadComments: (issueId) => run(loadIssueComments(issueId)),
     addComment: (issueId, body) => run(addIssueComment(issueId, body)),
     editText: editWithExternalEditor,
+    copyIssueIdentifier: (issue) => run(copyIssueIdentifier(issue)),
+    openIssueInBrowser: (issue) => run(openIssueInBrowser(issue)),
     changeIssueStatus: (issue, stateId) => run(changeIssueStatus(issue, stateId)),
     dispose: () => {
       const running = [...fibers];

@@ -83,6 +83,7 @@ export const issues = sqliteTable("issues", {
   id: text("id").primaryKey(),
   teamId: text("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
   identifier: text("identifier").notNull(),
+  url: text("url").notNull().default(""),
   number: integer("number").notNull(),
   title: text("title").notNull(),
   description: text("description"),
@@ -96,7 +97,8 @@ export const issues = sqliteTable("issues", {
   canceledAt: integer("canceled_at", { mode: "timestamp_ms" }),
   ...timestamps,
 }, (table) => [
-  uniqueIndex("issues_identifier_unique").on(table.identifier),
+  uniqueIndex("issues_team_number_unique").on(table.teamId, table.number),
+  index("issues_identifier_idx").on(table.identifier),
   index("issues_team_updated_idx").on(table.teamId, table.updatedAt),
   index("issues_state_idx").on(table.stateId),
   index("issues_assignee_idx").on(table.assigneeId),

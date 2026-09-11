@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { CacheService, StorageError } from "@lineater/core";
 import { drizzle, type BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
 import { Context, Effect, Layer } from "effect";
-import { chmod, mkdir } from "node:fs/promises";
+import { chmod, lstat, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { applyMigrations } from "./migrations";
 import { schema } from "./schema";
@@ -34,6 +34,13 @@ const makeConnectionLayer = (options: StorageOptions) => Layer.scoped(
     Effect.tryPromise({
       try: async () => {
         const databaseDirectory = dirname(options.databasePath);
+        const existingDatabase = await lstat(options.databasePath).catch((cause: NodeJS.ErrnoException) => {
+          if (cause.code === "ENOENT") return null;
+          throw cause;
+        });
+        if (existingDatabase?.isSymbolicLink() || (existingDatabase && !existingDatabase.isFile())) {
+          throw new Error("Database path must be a regular file, not a symbolic link");
+        }
         const createdDirectory = await mkdir(databaseDirectory, { recursive: true, mode: 0o700 });
         if (createdDirectory !== undefined) await chmod(databaseDirectory, 0o700);
         const sqlite = new Database(options.databasePath, { create: true });
@@ -46,6 +53,11 @@ const makeConnectionLayer = (options: StorageOptions) => Layer.scoped(
           sqlite.exec("PRAGMA busy_timeout = 5000;");
 
           applyMigrations(sqlite);
+          await Promise.all([
+            chmod(options.databasePath, 0o600),
+            chmod(`${options.databasePath}-wal`, 0o600).catch(() => undefined),
+            chmod(`${options.databasePath}-shm`, 0o600).catch(() => undefined),
+          ]);
           const db = drizzle(sqlite, { schema });
 
           return { sqlite, db } satisfies StorageConnectionShape;
