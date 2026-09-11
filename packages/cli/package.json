@@ -1,0 +1,13 @@
+{
+  "name": "@lineater/cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@effect/cli": "^0.77.1",
+    "@lineater/core": "workspace:*",
+    "@lineater/tui": "workspace:*",
+    "effect": "^3.22.2"
+  }
+}

@@ -1,15 +1,3 @@
-# lineater
+# @lineater/app
 
-To install dependencies:
-
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.3.14. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+Lineater's Bun executable and Effect layer composition root. Run it from the repository root with `bun run dev`.

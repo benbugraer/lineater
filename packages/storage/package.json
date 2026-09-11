@@ -1,17 +1,19 @@
 {
-  "name": "storage",
-  "module": "index.ts",
-  "type": "module",
+  "name": "@lineater/storage",
+  "version": "0.0.1",
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest",
-    "drizzle-kit": "^0.31.10"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "generate": "cd ../.. && bunx drizzle-kit generate --config packages/storage/drizzle.config.ts"
   },
   "dependencies": {
+    "@lineater/core": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "effect": "^3.22.2"
+  },
+  "devDependencies": {
+    "@lineater/testkit": "workspace:*",
+    "drizzle-kit": "^0.31.10"
   }
 }

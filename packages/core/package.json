@@ -1,14 +1,9 @@
 {
-  "name": "core",
-  "module": "index.ts",
-  "type": "module",
+  "name": "@lineater/core",
+  "version": "0.0.1",
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
-  },
+  "type": "module",
+  "exports": "./src/index.ts",
   "dependencies": {
     "effect": "^3.22.2"
   }

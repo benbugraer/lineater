@@ -1,12 +1,23 @@
 {
-  "name": "lineater",
-  "module": "index.ts",
-  "type": "module",
+  "name": "@lineater/app",
+  "version": "0.0.1",
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
+  "type": "module",
+  "bin": {
+    "lineater": "./src/main.ts"
   },
-  "peerDependencies": {
-    "typescript": "^5"
+  "scripts": {
+    "dev": "bun run src/main.ts"
+  },
+  "dependencies": {
+    "@effect/cli": "^0.77.1",
+    "@effect/platform-bun": "^0.91.2",
+    "@lineater/auth": "workspace:*",
+    "@lineater/cli": "workspace:*",
+    "@lineater/config": "workspace:*",
+    "@lineater/linear": "workspace:*",
+    "@lineater/storage": "workspace:*",
+    "@lineater/tui": "workspace:*",
+    "effect": "^3.22.2"
   }
 }

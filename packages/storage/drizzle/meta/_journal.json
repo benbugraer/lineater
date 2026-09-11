@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788978958932,
+      "tag": "0000_far_selene",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789072031173,
+      "tag": "0001_free_vampiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789082166476,
+      "tag": "0002_crazy_avengers",
+      "breakpoints": true
+    }
+  ]
+}

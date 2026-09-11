@@ -1,0 +1,1 @@
+ALTER TABLE `sync_state` ADD `viewer_id` text REFERENCES users(id);
