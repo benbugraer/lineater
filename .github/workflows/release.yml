@@ -86,17 +86,10 @@ jobs:
           dbus-run-session -- bash -euo pipefail -c '
             rm -rf "$HOME/.local/share/keyrings"
             eval "$(printf "lineater-ci\n" | gnome-keyring-daemon --daemonize --login --components=secrets)"
-            for attempt in $(seq 1 10); do
-              dbus-send --session --dest=org.freedesktop.DBus \
-                --type=method_call --print-reply \
-                /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null \
-                | grep -q org.freedesktop.secrets && break
-              sleep 1
-            done
-            dbus-send --session --dest=org.freedesktop.DBus \
-              --type=method_call --print-reply \
-              /org/freedesktop/DBus org.freedesktop.DBus.ListNames \
-              | grep -q org.freedesktop.secrets
+            printf "ready" | secret-tool store \
+              --label="Lineater CI keyring probe" \
+              service lineater-ci name oauth-smoke
+            test "$(secret-tool lookup service lineater-ci name oauth-smoke)" = "ready"
             ./scripts/auth-install-smoke.sh /tmp/lineater-smoke/lineater "$LINEATER_RELEASE_LINEAR_CLIENT_ID"
           '
 
