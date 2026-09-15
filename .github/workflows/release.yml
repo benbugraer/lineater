@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -74,10 +74,31 @@ jobs:
           tar -xzf release/lineater-linux-x64.tar.gz -C /tmp/lineater-smoke
           /tmp/lineater-smoke/lineater --version | grep -Fx "${GITHUB_REF_NAME#v}"
 
+      - name: Install Linux Secret Service for OAuth smoke test
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends dbus-x11 gnome-keyring libsecret-tools
+
       - name: Smoke-test fresh-install OAuth
         env:
           LINEATER_RELEASE_LINEAR_CLIENT_ID: ${{ vars.LINEATER_LINEAR_CLIENT_ID }}
-        run: ./scripts/auth-install-smoke.sh /tmp/lineater-smoke/lineater "$LINEATER_RELEASE_LINEAR_CLIENT_ID"
+        run: |
+          dbus-run-session -- bash -euo pipefail -c '
+            rm -rf "$HOME/.local/share/keyrings"
+            eval "$(printf "lineater-ci\n" | gnome-keyring-daemon --daemonize --login --components=secrets)"
+            for attempt in $(seq 1 10); do
+              dbus-send --session --dest=org.freedesktop.DBus \
+                --type=method_call --print-reply \
+                /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null \
+                | grep -q org.freedesktop.secrets && break
+              sleep 1
+            done
+            dbus-send --session --dest=org.freedesktop.DBus \
+              --type=method_call --print-reply \
+              /org/freedesktop/DBus org.freedesktop.DBus.ListNames \
+              | grep -q org.freedesktop.secrets
+            ./scripts/auth-install-smoke.sh /tmp/lineater-smoke/lineater "$LINEATER_RELEASE_LINEAR_CLIENT_ID"
+          '
 
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@v2
