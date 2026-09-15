@@ -3,7 +3,7 @@ import type { Comment, InitialReadModel, Issue, WorkflowState } from "@lineater/
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useEffect, useRef } from "react";
 import type { ActivePane, LayoutMode, WorkspaceView } from "./model";
-import { orderedStates, priorityLabel, relativeDate } from "./model";
+import { priorityLabel, relativeDate } from "./model";
 import { useTheme } from "./theme";
 
 export interface NavigationItem {
@@ -24,6 +24,9 @@ interface WorkspaceScreenProps {
   readonly selectedIssue: Issue | null;
   readonly selectedIssueIndex: number;
   readonly selectedColumnIndex: number;
+  readonly boardStates: readonly WorkflowState[];
+  readonly hiddenBoardColumnCount: number;
+  readonly sidebarCollapsed: boolean;
   readonly detailOpen: boolean;
   readonly query: string;
   readonly activeFilterCount: number;
@@ -55,27 +58,43 @@ function Sidebar({ model, navigation, selectedIndex, active }: {
   readonly active: boolean;
 }) {
   const theme = useTheme();
-  const row = (item: NavigationItem, index: number) => (
-    <box key={item.id} height={1} paddingLeft={2} paddingRight={2} backgroundColor={index === selectedIndex ? theme.palette.selection : theme.palette.elevated} alignItems="center" flexDirection="row">
-      <text fg={theme.palette.text}><span fg={item.color ?? (index === selectedIndex ? theme.palette.accentBright : theme.palette.subtle)}>{item.id.startsWith("team:") ? "●" : item.hint}</span><span fg={index === selectedIndex ? theme.palette.text : theme.palette.textSecondary}>  {item.label}</span></text>
-      <box flexGrow={1} />
-      {index === selectedIndex && active ? <text fg={theme.palette.accent}>›</text> : null}
-    </box>
-  );
+  const row = (item: NavigationItem, index: number) => {
+    const selected = index === selectedIndex;
+    return (
+      <box
+        key={item.id}
+        height={1}
+        paddingLeft={1}
+        paddingRight={1}
+        backgroundColor={selected ? theme.palette.selection : theme.palette.elevated}
+        border={["left"]}
+        borderColor={selected ? theme.palette.accent : theme.palette.elevated}
+        alignItems="center"
+        flexDirection="row"
+      >
+        <text fg={item.color ?? (selected ? theme.palette.accentBright : theme.palette.subtle)}>{item.id.startsWith("team:") ? "●" : item.hint}</text>
+        <text fg={selected ? theme.palette.text : theme.palette.textSecondary}> {item.label}</text>
+        <box flexGrow={1} />
+        {selected && active ? <text fg={theme.palette.accent}>›</text> : null}
+      </box>
+    );
+  };
   return (
-    <box width={27} height="100%" backgroundColor={theme.palette.elevated} border={["right"]} borderColor={active ? theme.palette.borderActive : theme.palette.border} flexDirection="column">
-      <box height={5} paddingLeft={2} paddingRight={2} flexDirection="column" justifyContent="center" border={["bottom"]} borderColor={theme.palette.border}>
+    <box width={24} height="100%" backgroundColor={theme.palette.elevated} border={["right"]} borderColor={active ? theme.palette.borderActive : theme.palette.border} flexDirection="column">
+      <box height={4} paddingLeft={2} paddingRight={1} flexDirection="column" justifyContent="center" border={["bottom"]} borderColor={theme.palette.border}>
         <text fg={theme.palette.text}><span fg={theme.palette.accent}>◆</span> <strong>{model.workspace.name}</strong></text>
         <text fg={theme.palette.subtle}>{model.viewer.displayName}</text>
       </box>
       <box flexGrow={1} paddingTop={1} flexDirection="column">
-        <box height={2} paddingLeft={2} alignItems="center"><text fg={theme.palette.subtle}>WORKSPACE</text></box>
+        <box height={1} paddingLeft={2}><text fg={theme.palette.subtle}>WORKSPACE</text></box>
         {navigation.slice(0, 2).map(row)}
-        <box height={2} paddingLeft={2} alignItems="center"><text fg={theme.palette.subtle}>TEAMS</text></box>
+        <box height={2} paddingLeft={2} paddingTop={1}><text fg={theme.palette.subtle}>TEAMS</text></box>
         {navigation.slice(2).map((item, index) => row(item, index + 2))}
       </box>
-      <box height={3} paddingLeft={2} flexDirection="column" justifyContent="center" border={["top"]} borderColor={theme.palette.border}>
-        <text fg={theme.palette.subtle}>{model.issues.length} cached issues</text>
+      <box height={2} paddingLeft={2} paddingRight={1} alignItems="center" border={["top"]} borderColor={theme.palette.border} flexDirection="row">
+        <text fg={theme.palette.subtle}>{model.issues.length} cached</text>
+        <box flexGrow={1} />
+        <text fg={theme.palette.muted}>[ hide</text>
       </box>
     </box>
   );
@@ -97,31 +116,45 @@ function IssueList({ model, issues, selectedIndex, active, width }: {
   }, [selectedId]);
   return (
     <box width={width} height="100%" backgroundColor={theme.palette.surface} border={["right"]} borderColor={active ? theme.palette.borderActive : theme.palette.border} flexDirection="column">
-      <box height={4} paddingLeft={2} paddingRight={2} flexDirection="column" justifyContent="center" border={["bottom"]} borderColor={theme.palette.border}>
-        <text fg={theme.palette.text}><strong>Issues</strong> <span fg={theme.palette.subtle}>{issues.length}</span></text>
+      <box height={3} paddingLeft={2} paddingRight={2} flexDirection="column" border={["bottom"]} borderColor={active ? theme.palette.borderActive : theme.palette.border}>
+        <box height={1} flexDirection="row">
+          <text fg={theme.palette.text}><strong>Issues</strong></text>
+          <text fg={theme.palette.accentText}> {issues.length}</text>
+          <box flexGrow={1} />
+          <text fg={active ? theme.palette.accentBright : theme.palette.subtle}>{active ? "ACTIVE" : "RECENT"}</text>
+        </box>
         <text fg={theme.palette.subtle}>Updated recently</text>
       </box>
       <scrollbox ref={scrollRef} flexGrow={1} focused={active} verticalScrollbarOptions={{ trackOptions: { backgroundColor: theme.palette.surface, foregroundColor: theme.palette.scrollbar } }}>
         {issues.length === 0 ? (
-          <box height={8} paddingLeft={2} paddingTop={2} flexDirection="column">
+          <box height={6} paddingLeft={2} paddingTop={2} flexDirection="column">
             <text fg={theme.palette.muted}><strong>No issues here</strong></text>
-            <text fg={theme.palette.subtle}>Change the team filter or refresh from Linear.</text>
+            <text fg={theme.palette.subtle}>Change filters or refresh from Linear.</text>
           </box>
         ) : issues.map((issue, index) => {
           const selected = index === selectedIndex;
           const status = statusFor(model, issue);
           return (
-            <box key={issue.id} id={`issue-row-${issue.id}`} height={4} paddingLeft={2} paddingRight={2} backgroundColor={selected ? theme.palette.selectionMuted : theme.palette.surface} border={["bottom"]} borderColor={theme.palette.border} flexDirection="column" justifyContent="center">
-              <box flexDirection="row">
+            <box
+              key={issue.id}
+              id={`issue-row-${issue.id}`}
+              height={3}
+              paddingLeft={1}
+              paddingRight={1}
+              backgroundColor={selected ? theme.palette.selectionMuted : theme.palette.surface}
+              border={["left", "bottom"]}
+              borderColor={selected ? theme.palette.accent : theme.palette.border}
+              flexDirection="column"
+            >
+              <box height={1} flexDirection="row">
                 <text fg={selected ? theme.palette.accentBright : theme.palette.muted}>{issue.identifier}</text>
                 <box flexGrow={1} />
-                <text fg={theme.palette.subtle}>{relativeDate(issue.updatedAt)}</text>
-              </box>
-              <box flexDirection="row">
-                <text fg={selected ? theme.palette.text : theme.palette.textSecondary}>{issue.title}</text>
-                <box flexGrow={1} />
-                <text fg={theme.palette.muted}>{priorityGlyph(issue.priority)} </text>
+                <text fg={issue.priority > 0 ? theme.palette.warning : theme.palette.subtle}>{priorityGlyph(issue.priority)} </text>
                 <text fg={status?.color ?? theme.palette.muted}>●</text>
+                <text fg={theme.palette.subtle}> {status?.name ?? "Unknown"} · {relativeDate(issue.updatedAt)}</text>
+              </box>
+              <box height={1}>
+                <text fg={selected ? theme.palette.text : theme.palette.textSecondary}>{issue.title}</text>
               </box>
             </box>
           );
@@ -214,13 +247,12 @@ function IssueDetail({ model, issue, active, compact, comments, commentsLoading 
   );
 }
 
-function BoardColumn({ state, issues, selectedIssue, selected, active, last, width }: {
+function BoardColumn({ state, issues, selectedIssue, selected, active, width }: {
   readonly state: WorkflowState;
   readonly issues: readonly Issue[];
   readonly selectedIssue: Issue | null;
   readonly selected: boolean;
   readonly active: boolean;
-  readonly last: boolean;
   readonly width: `${number}%`;
 }) {
   const theme = useTheme();
@@ -232,21 +264,27 @@ function BoardColumn({ state, issues, selectedIssue, selected, active, last, wid
   }, [selectedId]);
 
   return (
-    <box width={width} marginRight={last ? 0 : 1} border borderColor={selected && active ? theme.palette.accent : theme.palette.border} backgroundColor={theme.palette.panel} flexDirection="column">
-      <box height={3} paddingLeft={1} paddingRight={1} alignItems="center" flexDirection="row" border={["bottom"]} borderColor={theme.palette.border}>
-        <text fg={state.color}>●</text><text fg={theme.palette.text}> <strong>{state.name}</strong></text>
-        <box flexGrow={1} /><text fg={theme.palette.subtle}>{issues.length}</text>
+    <box width={width} border borderColor={selected && active ? theme.palette.accent : theme.palette.border} backgroundColor={theme.palette.panel} flexDirection="column">
+      <box height={2} paddingLeft={1} paddingRight={1} alignItems="center" flexDirection="row" border={["bottom"]} borderColor={theme.palette.border}>
+        <text fg={state.color}>●</text><text fg={selected ? theme.palette.text : theme.palette.textSecondary}> <strong>{state.name}</strong></text>
+        <box flexGrow={1} /><text fg={selected ? theme.palette.accentText : theme.palette.subtle}>{issues.length}</text>
       </box>
       <scrollbox ref={scrollRef} flexGrow={1} verticalScrollbarOptions={{ trackOptions: { backgroundColor: theme.palette.panel, foregroundColor: theme.palette.scrollbar } }}>
         {issues.length === 0 ? (
-          <box height={4} padding={1}><text fg={theme.palette.subtle}>No issues</text></box>
+          <box height={3} paddingLeft={1} paddingTop={1}><text fg={theme.palette.subtle}>No issues</text></box>
         ) : issues.map((issue) => {
           const issueSelected = selected && selectedIssue?.id === issue.id;
           return (
-            <box key={issue.id} id={`board-issue-${issue.id}`} minHeight={5} padding={1} marginBottom={1} backgroundColor={issueSelected ? theme.palette.selection : theme.palette.elevated} border={["left"]} borderColor={issueSelected ? theme.palette.accent : theme.palette.border} flexDirection="column">
-              <text fg={theme.palette.muted}>{issue.identifier}</text>
-              <text fg={issueSelected ? theme.palette.text : theme.palette.textSecondary} wrapMode="word">{issue.title}</text>
-              <text fg={theme.palette.subtle}>{priorityGlyph(issue.priority)} {priorityLabel(issue.priority)}</text>
+            <box key={issue.id} id={`board-issue-${issue.id}`} height={4} paddingLeft={1} paddingRight={1} backgroundColor={issueSelected ? theme.palette.selection : theme.palette.elevated} border={["left", "bottom"]} borderColor={issueSelected ? theme.palette.accent : theme.palette.border} flexDirection="column">
+              <box height={1} flexDirection="row">
+                <text fg={issueSelected ? theme.palette.accentBright : theme.palette.muted}>{issue.identifier}</text>
+                <box flexGrow={1} />
+                <text fg={issue.priority > 0 ? theme.palette.warning : theme.palette.subtle}>{priorityGlyph(issue.priority)}</text>
+              </box>
+              <box height={1}>
+                <text fg={issueSelected ? theme.palette.text : theme.palette.textSecondary}>{issue.title}</text>
+              </box>
+              <text fg={theme.palette.subtle}>{relativeDate(issue.updatedAt)} · {priorityLabel(issue.priority)}</text>
             </box>
           );
         })}
@@ -255,19 +293,18 @@ function BoardColumn({ state, issues, selectedIssue, selected, active, last, wid
   );
 }
 
-function Board({ model, issues, selectedIssue, selectedColumnIndex, layout, active }: {
-  readonly model: InitialReadModel;
+function Board({ states, issues, selectedIssue, selectedColumnIndex, hiddenColumnCount, layout, active }: {
+  readonly states: readonly WorkflowState[];
   readonly issues: readonly Issue[];
   readonly selectedIssue: Issue | null;
   readonly selectedColumnIndex: number;
+  readonly hiddenColumnCount: number;
   readonly layout: LayoutMode;
   readonly active: boolean;
 }) {
   const theme = useTheme();
-  const teamId = selectedIssue?.teamId ?? issues[0]?.teamId ?? null;
-  const states = orderedStates(model, teamId);
-  const visibleColumns = layout === "wide" ? 3 : layout === "medium" ? 2 : 1;
-  const start = Math.max(0, Math.min(states.length - visibleColumns, selectedColumnIndex - Math.floor(visibleColumns / 2)));
+  const visibleColumns = layout === "wide" ? 4 : layout === "medium" ? 3 : 1;
+  const start = Math.max(0, Math.min(Math.max(0, states.length - visibleColumns), selectedColumnIndex - Math.floor(visibleColumns / 2)));
   const columns = states.slice(start, start + visibleColumns);
 
   if (states.length === 0) {
@@ -275,22 +312,29 @@ function Board({ model, issues, selectedIssue, selectedColumnIndex, layout, acti
   }
 
   return (
-    <box flexGrow={1} height="100%" backgroundColor={theme.palette.background} padding={1} flexDirection="row">
-      {columns.map((state, index) => {
-        const stateIndex = states.findIndex(({ id }) => id === state.id);
-        return (
-          <BoardColumn
-            key={state.id}
-            state={state}
-            issues={issues.filter(({ stateId }) => stateId === state.id)}
-            selectedIssue={selectedIssue}
-            selected={stateIndex === selectedColumnIndex}
-            active={active}
-            last={index === columns.length - 1}
-            width={`${100 / columns.length}%`}
-          />
-        );
-      })}
+    <box flexGrow={1} height="100%" backgroundColor={theme.palette.background} flexDirection="column">
+      <box height={2} paddingLeft={1} paddingRight={1} backgroundColor={theme.palette.surface} border={["bottom"]} borderColor={theme.palette.border} alignItems="center" flexDirection="row">
+        <text fg={theme.palette.textSecondary}><strong>{issues.length}</strong> issues</text>
+        <text fg={theme.palette.subtle}> · columns {start + 1}–{start + columns.length} of {states.length}{hiddenColumnCount > 0 ? ` · ${hiddenColumnCount} hidden` : ""}</text>
+        <box flexGrow={1} />
+        <text fg={theme.palette.muted}><span fg={theme.palette.textSecondary}>shift+v</span> columns  <span fg={theme.palette.textSecondary}>h/l</span> navigate  <span fg={theme.palette.textSecondary}>H/L</span> move</text>
+      </box>
+      <box flexGrow={1} padding={1} flexDirection="row">
+        {columns.map((state) => {
+          const stateIndex = states.findIndex(({ id }) => id === state.id);
+          return (
+            <BoardColumn
+              key={state.id}
+              state={state}
+              issues={issues.filter(({ stateId }) => stateId === state.id)}
+              selectedIssue={selectedIssue}
+              selected={stateIndex === selectedColumnIndex}
+              active={active}
+              width={`${100 / columns.length}%`}
+            />
+          );
+        })}
+      </box>
     </box>
   );
 }
@@ -299,10 +343,10 @@ export function WorkspaceScreen(props: WorkspaceScreenProps) {
   const theme = useTheme();
   const {
     model, layout, view, activePane, navigation, selectedNavigationIndex, issues,
-    selectedIssue, selectedIssueIndex, selectedColumnIndex, detailOpen, query, activeFilterCount,
+    selectedIssue, selectedIssueIndex, selectedColumnIndex, boardStates, hiddenBoardColumnCount, sidebarCollapsed, detailOpen, query, activeFilterCount,
     syncing, cachedOnly, mutationIssueId, notice, comments, commentsLoading,
   } = props;
-  const showSidebar = layout === "wide";
+  const showSidebar = layout === "wide" && !sidebarCollapsed;
   const singleDetail = layout === "single" && detailOpen;
   const noticeLimit = layout === "wide" ? 100 : layout === "medium" ? 68 : 34;
   const noticeText = notice && notice.message.length > noticeLimit
@@ -325,12 +369,12 @@ export function WorkspaceScreen(props: WorkspaceScreenProps) {
       <box flexGrow={1} flexDirection="row">
         {showSidebar ? <Sidebar model={model} navigation={navigation} selectedIndex={selectedNavigationIndex} active={activePane === "sidebar"} /> : null}
         {view === "board" ? (
-          <Board model={model} issues={issues} selectedIssue={selectedIssue} selectedColumnIndex={selectedColumnIndex} layout={layout} active={activePane === "issues"} />
+          <Board states={boardStates} issues={issues} selectedIssue={selectedIssue} selectedColumnIndex={selectedColumnIndex} hiddenColumnCount={hiddenBoardColumnCount} layout={layout} active={activePane === "issues"} />
         ) : singleDetail ? (
           <IssueDetail model={model} issue={selectedIssue} active compact comments={comments} commentsLoading={commentsLoading} />
         ) : (
           <>
-            <IssueList model={model} issues={issues} selectedIndex={selectedIssueIndex} active={activePane === "issues"} width={layout === "wide" ? 48 : layout === "medium" ? 43 : "100%"} />
+            <IssueList model={model} issues={issues} selectedIndex={selectedIssueIndex} active={activePane === "issues"} width={layout === "wide" ? 44 : layout === "medium" ? 40 : "100%"} />
             {layout !== "single" ? <IssueDetail model={model} issue={selectedIssue} active={activePane === "detail"} compact={false} comments={comments} commentsLoading={commentsLoading} /> : null}
           </>
         )}
@@ -340,7 +384,7 @@ export function WorkspaceScreen(props: WorkspaceScreenProps) {
         {notice ? <text fg={notice.tone === "error" ? theme.palette.error : theme.palette.accentBright}>{noticeText}</text> : layout === "single" ? (
           <text fg={theme.palette.muted}><span fg={theme.palette.textSecondary}>j/k</span> move  <span fg={theme.palette.textSecondary}>n</span> new  <span fg={theme.palette.textSecondary}>b</span> board  <span fg={theme.palette.textSecondary}>f</span> filter  <span fg={theme.palette.textSecondary}>S/,</span> settings  <span fg={theme.palette.textSecondary}>?</span> help</text>
         ) : (
-          <text fg={theme.palette.muted}><span fg={theme.palette.textSecondary}>j/k</span> navigate   <span fg={theme.palette.textSecondary}>n</span> new   <span fg={theme.palette.textSecondary}>e</span> edit   <span fg={theme.palette.textSecondary}>b</span> {view === "board" ? "list" : "board"}   <span fg={theme.palette.textSecondary}>f</span> filter   <span fg={theme.palette.textSecondary}>S/,</span> settings   <span fg={theme.palette.textSecondary}>?</span> help</text>
+          <text fg={theme.palette.muted}><span fg={theme.palette.textSecondary}>j/k</span> navigate   <span fg={theme.palette.textSecondary}>n</span> new   <span fg={theme.palette.textSecondary}>e</span> edit   <span fg={theme.palette.textSecondary}>b</span> {view === "board" ? "list" : "board"}   {layout === "wide" ? <><span fg={theme.palette.textSecondary}>[</span> sidebar   </> : null}<span fg={theme.palette.textSecondary}>f</span> filter   <span fg={theme.palette.textSecondary}>S/,</span> settings   <span fg={theme.palette.textSecondary}>?</span> help</text>
         )}
         <box flexGrow={1} />
         {layout === "single" ? null : <text fg={theme.palette.subtle}>{model.workspace.name} · {model.viewer.displayName}</text>}

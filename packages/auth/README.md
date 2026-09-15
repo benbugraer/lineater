@@ -7,7 +7,9 @@ Security properties:
 - cryptographically random PKCE verifier and CSRF `state`
 - exact, fixed loopback redirect URI and five-minute callback timeout
 - invalid-state loopback requests are rejected without cancelling the legitimate callback
+- release-time embedded public client ID with runtime/config overrides for source builds
 - no client secret in the distributed CLI
+- fresh-install release smoke test verifies the authorization endpoint, callback, state, scopes, and PKCE challenge before publication
 - access and rotating refresh tokens only in `Bun.secrets`
 - no plaintext credential fallback
 - bounded token/credential payloads, granted-scope validation, refresh coalescing, and one-minute expiry skew

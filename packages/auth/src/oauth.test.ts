@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AuthService, BrowserService, SecretStore } from "@lineater/core";
+import { AuthError, AuthService, BrowserService, SecretStore } from "@lineater/core";
 import { ConfigService } from "@lineater/config";
 import { Effect, Fiber, Layer } from "effect";
 import { AuthLive, buildAuthorizationUrl, createPkce, waitForCallback } from "./oauth";
@@ -40,6 +40,31 @@ describe("Linear OAuth PKCE", () => {
     const response = await fetch("http://127.0.0.1:45991/oauth/callback?code=authorization-code&state=expected-state");
     expect(response.status).toBe(200);
     await expect(callback).resolves.toEqual({ code: "authorization-code" });
+  });
+
+  test("checks secure credential storage before opening browser consent", async () => {
+    let browserOpened = false;
+    const ConfigTest = Layer.succeed(ConfigService, {
+      paths: { configDirectory: "/tmp", dataDirectory: "/tmp", stateDirectory: "/tmp", configPath: "/tmp/config.json", databasePath: "/tmp/test.db", logPath: "/tmp/test.log" },
+      oauth: config,
+      preferences: { theme: "linear", defaultView: "list", autoSync: true, keybindings: {} },
+    });
+    const BrowserTest = Layer.succeed(BrowserService, {
+      open: () => Effect.sync(() => { browserOpened = true; }),
+    });
+    const unavailable = new AuthError({ reason: "secret-store", message: "Credential store unavailable" });
+    const SecretTest = Layer.succeed(SecretStore, {
+      get: () => Effect.fail(unavailable),
+      set: () => Effect.fail(unavailable),
+      remove: () => Effect.fail(unavailable),
+    });
+    const layer = AuthLive.pipe(Layer.provide(Layer.mergeAll(ConfigTest, BrowserTest, SecretTest)));
+
+    await expect(Effect.runPromise(AuthService.pipe(
+      Effect.flatMap(({ login }) => login),
+      Effect.provide(layer),
+    ))).rejects.toThrow("Credential store unavailable");
+    expect(browserOpened).toBe(false);
   });
 
   test("completes login and stores the rotating token bundle through SecretStore", async () => {

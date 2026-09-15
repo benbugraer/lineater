@@ -110,3 +110,7 @@ case ":${PATH:-}:" in
     ;;
 esac
 printf '\nRun: lineater\n'
+printf 'On first launch, choose Authorize with Linear to complete secure browser login.\n'
+if [ "$os" = "linux" ]; then
+  printf 'Linux credential storage requires an unlocked Secret Service (for example GNOME Keyring or KWallet).\n'
+fi

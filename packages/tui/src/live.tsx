@@ -30,7 +30,7 @@ import { registerDefaultKeys, registerEscapeClearsPendingSequence, registerNeovi
 import { createOpenTuiKeymap } from "@opentui/keymap/opentui";
 import { KeymapProvider } from "@opentui/keymap/react";
 import { createRoot, type Root } from "@opentui/react";
-import { Effect, Fiber, Layer, Runtime } from "effect";
+import { Cause, Effect, Exit, Fiber, Layer, Option, Runtime } from "effect";
 import type { TuiController } from "./controller";
 import { editWithExternalEditor } from "./editor";
 import { LineaterApp } from "./LineaterApp";
@@ -107,7 +107,12 @@ export const TuiLive = Layer.effect(TuiService, Effect.gen(function* () {
   const run = <A, E>(effect: Effect.Effect<A, E, TuiEnvironment>): Promise<A> => {
     const fiber = Runtime.runFork(runtime)(effect);
     fibers.add(fiber);
-    return Runtime.runPromise(runtime)(Fiber.join(fiber)).finally(() => { fibers.delete(fiber); });
+    return Runtime.runPromise(runtime)(Fiber.await(fiber)).then((exit) => {
+      if (Exit.isSuccess(exit)) return exit.value;
+      const failure = Cause.failureOption(exit.cause);
+      if (Option.isSome(failure)) throw failure.value;
+      throw Cause.squash(exit.cause);
+    }).finally(() => { fibers.delete(fiber); });
   };
   const controller: TuiController = {
     bootstrap: () => run(loadTuiBootstrap),

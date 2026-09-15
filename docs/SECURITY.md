@@ -4,7 +4,7 @@ Lineater is a local terminal client. Linear remains the source of truth and SQLi
 
 ## Authentication
 
-- OAuth 2.0 Authorization Code with PKCE S256; public client, no bundled client secret.
+- OAuth 2.0 Authorization Code with PKCE S256; official release binaries embed only the non-sensitive public client ID and never bundle a client secret.
 - Cryptographically random verifier and state.
 - Exact fixed-port loopback callback bound only to `localhost`, `127.0.0.1`, or `::1`.
 - Wrong-state requests receive HTTP 400 without cancelling the legitimate pending callback.
@@ -49,6 +49,9 @@ bun run typecheck
 bun test
 bun run build
 bun run build:web
-bun run build:release
+LINEATER_RELEASE_LINEAR_CLIENT_ID="$LINEATER_LINEAR_CLIENT_ID" bun run build:release
 bun run test:installer
+mkdir -p /tmp/lineater-auth-smoke
+tar -xzf release/lineater-linux-x64.tar.gz -C /tmp/lineater-auth-smoke
+./scripts/auth-install-smoke.sh /tmp/lineater-auth-smoke/lineater "$LINEATER_LINEAR_CLIENT_ID"
 ```

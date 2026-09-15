@@ -22,12 +22,14 @@ import {
 } from "./keymap";
 import {
   activeIssueFilterCount,
-  adjacentStatus,
   emptyIssueFilters,
+  isAuthenticationFailure,
   layoutMode,
   moveIndex,
+  orderedBoardIssues,
   orderedStates,
   replaceIssue,
+  visibleBoardStates,
   visibleIssues,
   type ActivePane,
   type IssueFilters,
@@ -80,6 +82,8 @@ const paletteCommands: readonly { readonly command: CommandName; readonly label:
   { command: "issue.copyIdentifier", label: "Copy issue identifier" },
   { command: "issue.openInBrowser", label: "Open issue in Linear" },
   { command: "view.toggle", label: "Toggle list / board view" },
+  { command: "view.toggleSidebar", label: "Collapse / expand sidebar" },
+  { command: "view.boardColumns", label: "Choose visible board columns" },
   { command: "app.refresh", label: "Refresh from Linear" },
   { command: "app.search", label: "Search issues" },
   { command: "app.filter", label: "Filter issues" },
@@ -131,6 +135,8 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
   const [columnIndex, setColumnIndex] = useState(0);
   const [boardRowIndex, setBoardRowIndex] = useState(0);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [hiddenBoardStateIds, setHiddenBoardStateIds] = useState<ReadonlySet<string>>(() => new Set());
   const [overlay, setOverlay] = useState<Overlay>("none");
   const [query, setQuery] = useState("");
   const [paletteQuery, setPaletteQuery] = useState("");
@@ -192,6 +198,12 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       }).catch((cause: unknown) => {
         if (!mounted) return;
         setSyncing(false);
+        if (isAuthenticationFailure(cause)) {
+          setCachedOnly(Boolean(cachedModel));
+          setAuthError("Your Linear session expired. Press Enter to authorize again.");
+          setPhase("unauthenticated");
+          return;
+        }
         if (cachedModel) {
           setCachedOnly(true);
           setNotice({ tone: "error", message: `Linear unavailable · ${safeMessage(cause)}` });
@@ -227,12 +239,29 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       : teamIssues;
   }, [activeFilter?.id, issueFilters, model, query, teamFilter]);
 
-  const boardStates = model && view === "board" ? orderedStates(model, teamFilter) : [];
+  const allBoardStates = useMemo(
+    () => model && view === "board" ? orderedStates(model, teamFilter) : [],
+    [model, teamFilter, view],
+  );
+  const boardStates = useMemo(
+    () => model && view === "board" ? visibleBoardStates(model, teamFilter, hiddenBoardStateIds) : [],
+    [hiddenBoardStateIds, model, teamFilter, view],
+  );
+  const boardDisplayIssues = useMemo(() => {
+    const visibleStateIds = new Set(boardStates.map(({ id }) => id));
+    return orderedBoardIssues(filteredIssues.filter(({ stateId }) => visibleStateIds.has(stateId)));
+  }, [boardStates, filteredIssues]);
   const boardState = boardStates[columnIndex];
-  const boardIssues = boardState ? filteredIssues.filter(({ stateId }) => stateId === boardState.id) : [];
+  const boardIssues = boardState ? boardDisplayIssues.filter(({ stateId }) => stateId === boardState.id) : [];
   const selectedIssue = view === "board"
     ? boardIssues[boardRowIndex] ?? null
     : filteredIssues[issueIndex] ?? null;
+
+  const focusBoardState = (stateId: string) => {
+    const targetIndex = boardStates.findIndex(({ id }) => id === stateId);
+    setColumnIndex(targetIndex >= 0 ? targetIndex : 0);
+    setBoardRowIndex(0);
+  };
 
   const pickerTeamId = draft?.teamId ?? selectedIssue?.teamId ?? teamFilter;
   const pickerOptions = useMemo<readonly PickerOption[]>(() => {
@@ -262,6 +291,13 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
         return [{ id: "", label: "No cycle", selected: (draft?.cycleId ?? currentIssue?.cycleId ?? null) === null }, ...model.cycles.filter(({ teamId }) => teamId === pickerTeamId).map(({ id, name, number }) => ({ id, label: name ?? `Cycle ${number}`, selected: id === (draft?.cycleId ?? currentIssue?.cycleId) }))];
     }
   }, [draft, model, pickerKind, pickerLabelIds, pickerTeamId, selectedIssue]);
+
+  const boardColumnOptions = allBoardStates.map(({ id, name, color }) => ({
+    id,
+    label: name,
+    color,
+    selected: !hiddenBoardStateIds.has(id),
+  }));
 
   const filterRows = useMemo(() => {
     const state = model?.workflowStates.find(({ id }) => id === issueFilters.stateId);
@@ -300,7 +336,11 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
     controller.authorize().then((fresh) => {
       setModel(fresh);
       setPhase("ready");
-      setNotice({ tone: "info", message: `Connected to ${fresh.workspace.name}` });
+      if (draft) setOverlay("composer");
+      else if (commentBody.trim() && selectedIssue) setOverlay("comment");
+      setNotice({ tone: "info", message: draft || commentBody.trim()
+        ? "Session restored · review and save your pending changes"
+        : `Connected to ${fresh.workspace.name}` });
     }).catch((cause: unknown) => {
       setAuthError(safeMessage(cause));
       setPhase("unauthenticated");
@@ -317,10 +357,21 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       setSyncing(false);
       setNotice({ tone: "info", message: `Synced ${fresh.issues.length} issues` });
     }).catch((cause: unknown) => {
+      if (requestReauthorization(cause)) return;
       setCachedOnly(true);
       setSyncing(false);
       setNotice({ tone: "error", message: `Refresh failed · ${safeMessage(cause)}` });
     });
+  };
+
+  const requestReauthorization = (cause: unknown): boolean => {
+    if (!isAuthenticationFailure(cause)) return false;
+    setMutationIssueId(null);
+    setSyncing(false);
+    setOverlay("none");
+    setAuthError("Your Linear session expired. Press Enter to authorize again, then retry the operation.");
+    setPhase("unauthenticated");
+    return true;
   };
 
   const loadComments = (issue: Issue) => {
@@ -330,6 +381,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       setCommentsLoading((current) => current === issue.id ? null : current);
     }).catch((cause: unknown) => {
       setCommentsLoading((current) => current === issue.id ? null : current);
+      if (requestReauthorization(cause)) return;
       setNotice({ tone: "error", message: `Comments unavailable · ${safeMessage(cause)}` });
     });
   };
@@ -348,6 +400,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       setOverlay("none");
       setNotice({ tone: "info", message: `Comment added to ${issue.identifier}` });
     }).catch((cause: unknown) => {
+      if (requestReauthorization(cause)) return;
       setMutationIssueId(null);
       setNotice({ tone: "error", message: `Comment failed · ${safeMessage(cause)}` });
     });
@@ -356,11 +409,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
   const mutateIssue = (issue: Issue, input: UpdateIssueInput, successMessage: string) => {
     if (!model || mutationIssueId) return;
     const original = issue;
-    if (view === "board" && input.stateId) {
-      const targetIndex = orderedStates(model, issue.teamId).findIndex(({ id }) => id === input.stateId);
-      if (targetIndex >= 0) setColumnIndex(targetIndex);
-      setBoardRowIndex(0);
-    }
+    if (view === "board" && input.stateId) focusBoardState(input.stateId);
     setModel(replaceIssue(model, applyIssuePatch(issue, input)));
     setMutationIssueId(issue.id);
     setOverlay("none");
@@ -370,10 +419,8 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       setNotice({ tone: "info", message: successMessage });
     }).catch((cause: unknown) => {
       setModel((current) => current ? replaceIssue(current, original) : current);
-      if (view === "board") {
-        const originalIndex = orderedStates(model, original.teamId).findIndex(({ id }) => id === original.stateId);
-        if (originalIndex >= 0) setColumnIndex(originalIndex);
-      }
+      if (view === "board") focusBoardState(original.stateId);
+      if (requestReauthorization(cause)) return;
       setMutationIssueId(null);
       setNotice({ tone: "error", message: `Update rolled back · ${safeMessage(cause)}` });
     });
@@ -506,6 +553,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
         setIssueIndex(0);
         setNotice({ tone: "info", message: `${created.identifier} created` });
       }).catch((cause: unknown) => {
+        if (requestReauthorization(cause)) return;
         setMutationIssueId(null);
         setNotice({ tone: "error", message: `Create failed · ${safeMessage(cause)}` });
       });
@@ -523,11 +571,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       cycleId: draft.cycleId,
       labelIds: draft.labelIds,
     };
-    if (view === "board") {
-      const targetIndex = orderedStates(model, original.teamId).findIndex(({ id }) => id === input.stateId);
-      if (targetIndex >= 0) setColumnIndex(targetIndex);
-      setBoardRowIndex(0);
-    }
+    if (view === "board") focusBoardState(draft.stateId);
     setModel(replaceIssue(model, applyIssuePatch(original, input)));
     controller.updateIssue(original, input).then((updated) => {
       setModel((current) => current ? replaceIssue(current, updated) : current);
@@ -537,10 +581,8 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       setNotice({ tone: "info", message: `${updated.identifier} updated` });
     }).catch((cause: unknown) => {
       setModel((current) => current ? replaceIssue(current, original) : current);
-      if (view === "board") {
-        const originalIndex = orderedStates(model, original.teamId).findIndex(({ id }) => id === original.stateId);
-        if (originalIndex >= 0) setColumnIndex(originalIndex);
-      }
+      if (view === "board") focusBoardState(original.stateId);
+      if (requestReauthorization(cause)) return;
       setMutationIssueId(null);
       setNotice({ tone: "error", message: `Update rolled back · ${safeMessage(cause)}` });
     });
@@ -623,11 +665,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
     if (!model || mutationIssueId || issue.stateId === stateId) return;
     const original = issue;
     const optimistic = { ...issue, stateId, updatedAt: new Date() };
-    if (view === "board") {
-      const targetIndex = orderedStates(model, issue.teamId).findIndex(({ id }) => id === stateId);
-      if (targetIndex >= 0) setColumnIndex(targetIndex);
-      setBoardRowIndex(0);
-    }
+    if (view === "board") focusBoardState(stateId);
     setModel(replaceIssue(model, optimistic));
     setMutationIssueId(issue.id);
     setOverlay("none");
@@ -637,10 +675,8 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       setNotice({ tone: "info", message: `${issue.identifier} moved successfully` });
     }).catch((cause: unknown) => {
       setModel((current) => current ? replaceIssue(current, original) : current);
-      if (view === "board") {
-        const originalIndex = orderedStates(model, original.teamId).findIndex(({ id }) => id === original.stateId);
-        if (originalIndex >= 0) setColumnIndex(originalIndex);
-      }
+      if (view === "board") focusBoardState(original.stateId);
+      if (requestReauthorization(cause)) return;
       setMutationIssueId(null);
       setNotice({ tone: "error", message: `Move rolled back · ${safeMessage(cause)}` });
     });
@@ -660,7 +696,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
     const nextTeamId = navigation[nextFilter]?.id.startsWith("team:")
       ? navigation[nextFilter]?.id.slice(5) ?? null
       : null;
-    const states = orderedStates(model, nextTeamId);
+    const states = visibleBoardStates(model, nextTeamId, hiddenBoardStateIds);
     if (nextFilter < 0 || !nextTeamId || states.length === 0) {
       setNotice({ tone: "error", message: "Board view needs a team with workflow states" });
       return;
@@ -724,6 +760,35 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
     }).catch((cause: unknown) => setNotice({ tone: "error", message: safeMessage(cause) }));
   };
 
+  const toggleSidebar = () => {
+    if (layout !== "wide") return;
+    if (!sidebarCollapsed && activePane === "sidebar") setActivePane("issues");
+    setSidebarCollapsed((collapsed) => !collapsed);
+  };
+
+  const openBoardColumns = () => {
+    if (view !== "board" || allBoardStates.length === 0) return;
+    const currentStateId = boardStates[columnIndex]?.id;
+    setOverlayIndex(Math.max(0, allBoardStates.findIndex(({ id }) => id === currentStateId)));
+    setOverlay("boardColumns");
+  };
+
+  const toggleBoardColumn = () => {
+    const option = boardColumnOptions[overlayIndex];
+    if (!option) return;
+    if (option.selected && boardColumnOptions.filter(({ selected }) => selected).length <= 1) {
+      setNotice({ tone: "error", message: "At least one board column must remain visible" });
+      return;
+    }
+    setHiddenBoardStateIds((hidden) => {
+      const next = new Set(hidden);
+      if (next.has(option.id)) next.delete(option.id); else next.add(option.id);
+      return next;
+    });
+    setColumnIndex(0);
+    setBoardRowIndex(0);
+  };
+
   const runPaletteSelection = () => {
     const selection = filteredPalette[overlayIndex];
     if (!selection) return;
@@ -742,6 +807,8 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       case "issue.copyIdentifier": copySelectedIssue(); break;
       case "issue.openInBrowser": openSelectedIssueInBrowser(); break;
       case "view.toggle": toggleView(); break;
+      case "view.toggleSidebar": toggleSidebar(); break;
+      case "view.boardColumns": openBoardColumns(); break;
       case "app.refresh": refresh(); break;
       case "app.search": setOverlay("search"); break;
       case "app.filter": openFilters(); break;
@@ -760,6 +827,8 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
         moveSettingsIndex(1);
       } else if (overlay === "picker") {
         setOverlayIndex((current) => moveIndex(current, 1, pickerOptions.length));
+      } else if (overlay === "boardColumns") {
+        setOverlayIndex((current) => moveIndex(current, 1, boardColumnOptions.length));
       } else if (overlay === "status") {
         const states = model && selectedIssue ? orderedStates(model, selectedIssue.teamId) : [];
         setOverlayIndex((current) => moveIndex(current, 1, states.length));
@@ -780,6 +849,8 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
         moveSettingsIndex(-1);
       } else if (overlay === "picker") {
         setOverlayIndex((current) => moveIndex(current, -1, pickerOptions.length));
+      } else if (overlay === "boardColumns") {
+        setOverlayIndex((current) => moveIndex(current, -1, boardColumnOptions.length));
       } else if (overlay === "status") {
         const states = model && selectedIssue ? orderedStates(model, selectedIssue.teamId) : [];
         setOverlayIndex((current) => moveIndex(current, -1, states.length));
@@ -812,7 +883,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
         setColumnIndex((current) => moveIndex(current, -1, boardStates.length));
         setBoardRowIndex(0);
       } else if (layout === "wide") {
-        setActivePane((current) => current === "detail" ? "issues" : "sidebar");
+        setActivePane((current) => current === "detail" ? "issues" : sidebarCollapsed ? "issues" : "sidebar");
       } else {
         setActivePane("issues");
       }
@@ -848,6 +919,8 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
         if (selectedIssue && state) setIssueStatus(selectedIssue, state.id);
       } else if (overlay === "picker") {
         applyPickerSelection();
+      } else if (overlay === "boardColumns") {
+        setOverlay("none");
       } else if (activePane === "sidebar") {
         applyFilter(navigationIndex);
       } else if (selectedIssue) {
@@ -895,7 +968,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
       }).catch((cause: unknown) => setNotice({ tone: "error", message: safeMessage(cause) }));
     },
     "composer.save": () => overlay === "comment" ? saveComment() : saveComposer(),
-    "picker.toggle": togglePickerOption,
+    "picker.toggle": () => overlay === "boardColumns" ? toggleBoardColumn() : togglePickerOption(),
     "app.back": () => {
       if (overlay === "picker" && pickerOrigin === "composer") {
         setOverlay("composer");
@@ -934,23 +1007,17 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
     "app.refresh": refresh,
     "app.quit": onExit,
     "view.toggle": toggleView,
+    "view.toggleSidebar": toggleSidebar,
+    "view.boardColumns": openBoardColumns,
     "board.moveLeft": () => {
       if (!model || view !== "board" || !selectedIssue) return;
-      const target = adjacentStatus(model, selectedIssue, -1);
-      if (target) {
-        setColumnIndex((current) => moveIndex(current, -1, boardStates.length));
-        setBoardRowIndex(0);
-        setIssueStatus(selectedIssue, target.id);
-      }
+      const target = boardStates[columnIndex - 1];
+      if (target) setIssueStatus(selectedIssue, target.id);
     },
     "board.moveRight": () => {
       if (!model || view !== "board" || !selectedIssue) return;
-      const target = adjacentStatus(model, selectedIssue, 1);
-      if (target) {
-        setColumnIndex((current) => moveIndex(current, 1, boardStates.length));
-        setBoardRowIndex(0);
-        setIssueStatus(selectedIssue, target.id);
-      }
+      const target = boardStates[columnIndex + 1];
+      if (target) setIssueStatus(selectedIssue, target.id);
     },
   };
 
@@ -979,7 +1046,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
           ? composerBindings
           : overlay === "comment"
             ? commentBindings
-            : overlay === "picker"
+            : overlay === "picker" || overlay === "boardColumns"
               ? pickerBindings
               : inputBindings;
 
@@ -1009,10 +1076,13 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
         activePane={activePane}
         navigation={navigation}
         selectedNavigationIndex={navigationIndex}
-        issues={filteredIssues}
+        issues={view === "board" ? boardDisplayIssues : filteredIssues}
         selectedIssue={selectedIssue}
         selectedIssueIndex={issueIndex}
         selectedColumnIndex={columnIndex}
+        boardStates={boardStates}
+        hiddenBoardColumnCount={allBoardStates.length - boardStates.length}
+        sidebarCollapsed={sidebarCollapsed}
         detailOpen={detailOpen}
         query={query}
         activeFilterCount={activeIssueFilterCount(issueFilters) + (filterIndex === 0 ? 0 : 1)}
@@ -1075,6 +1145,7 @@ export function LineaterApp({ controller, onExit }: LineaterAppProps) {
         />
       ) : null}
       {overlay === "picker" ? <PickerOverlay title={pickerTitle} options={pickerOptions} selectedIndex={overlayIndex} multiple={pickerKind === "labels"} /> : null}
+      {overlay === "boardColumns" ? <PickerOverlay title="Board columns" options={boardColumnOptions} selectedIndex={overlayIndex} multiple /> : null}
       {overlay === "settings" ? <SettingsOverlay preferences={preferences} selectedIndex={settingsIndex} /> : null}
       {overlay === "filters" ? <FilterOverlay rows={filterRows} selectedIndex={filterPanelIndex} activeCount={activeIssueFilterCount(issueFilters) + (filterIndex === 0 ? 0 : 1)} /> : null}
       </box>

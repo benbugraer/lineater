@@ -5,7 +5,7 @@ import { useTerminalDimensions } from "@opentui/react";
 import { useEffect, useRef } from "react";
 import { themes, useTheme } from "./theme";
 
-export type Overlay = "none" | "help" | "search" | "palette" | "status" | "composer" | "comment" | "picker" | "settings" | "filters";
+export type Overlay = "none" | "help" | "search" | "palette" | "status" | "composer" | "comment" | "picker" | "boardColumns" | "settings" | "filters";
 
 export interface IssueDraft {
   readonly mode: "create" | "edit";
@@ -69,6 +69,8 @@ export function HelpOverlay() {
             <Shortcut keys="P / C" label="Project / cycle" />
             <Shortcut keys="y / o" label="Copy ID / open Linear" />
             <Shortcut keys="b" label="List / board" />
+            <Shortcut keys="[" label="Collapse / expand sidebar" />
+            <Shortcut keys="shift+v" label="Choose visible board columns" />
             <Shortcut keys="H / L" label="Move issue status" />
             <Shortcut keys="r" label="Refresh from Linear" />
             <box height={1} />
@@ -338,7 +340,7 @@ export function PickerOverlay({ title, options, selectedIndex, multiple = false 
             return (
               <box key={option.id} height={2} paddingLeft={2} paddingRight={2} backgroundColor={index === selectedIndex ? theme.palette.selection : theme.palette.surface} alignItems="center" flexDirection="row">
                 {option.color ? <text fg={option.color}>● </text> : null}
-                <text fg={index === selectedIndex ? theme.palette.accentText : theme.palette.textSecondary}>{multiple ? option.selected ? "✓" : "·" : index === selectedIndex ? "›" : " "}  {option.label}</text>
+                <text fg={index === selectedIndex ? theme.palette.accentText : theme.palette.textSecondary}>{index === selectedIndex ? "›" : " "}  {multiple ? option.selected ? "✓" : "·" : ""} {option.label}</text>
               </box>
             );
           })}

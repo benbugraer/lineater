@@ -53,6 +53,27 @@ interface ConfigFile {
   readonly keybindings?: Readonly<Record<string, string>>;
 }
 
+declare const LINEATER_PACKAGED_LINEAR_CLIENT_ID: string | undefined;
+
+const packagedLinearClientId = typeof LINEATER_PACKAGED_LINEAR_CLIENT_ID === "string"
+  ? LINEATER_PACKAGED_LINEAR_CLIENT_ID.trim()
+  : undefined;
+
+const reservedOAuthClientIds = new Set([
+  "your-client-id",
+  "your-public-client-id",
+  "public-oauth-client-id",
+  "gercek_linear_client_id",
+  "example-client-id",
+]);
+
+const isReservedOAuthClientId = (clientId: string): boolean => {
+  const normalized = clientId.trim().toLowerCase();
+  return reservedOAuthClientIds.has(normalized)
+    || /^(your|gercek|example|placeholder|sample|changeme)[-_]/i.test(clientId)
+    || /placeholder|example[-_]?client|your[-_]?public/i.test(clientId);
+};
+
 const allowedScopes = new Set([
   "read",
   "write",
@@ -171,9 +192,16 @@ const readConfigFile = async (path: string): Promise<ConfigFile> => {
 export const makeOAuthConfig = (
   environment: Readonly<Record<string, string | undefined>>,
   file: ConfigFile,
+  packagedClientId: string | undefined = packagedLinearClientId,
 ): OAuthConfig | null => {
-  const clientId = environment.LINEATER_LINEAR_CLIENT_ID ?? file.linearClientId;
+  const clientId = (environment.LINEATER_LINEAR_CLIENT_ID ?? file.linearClientId ?? packagedClientId)?.trim();
   if (!clientId) return null;
+  if (clientId.length < 8 || clientId.length > 256 || !/^[A-Za-z0-9._~-]+$/.test(clientId)) {
+    throw new Error("Linear OAuth client ID has an invalid format");
+  }
+  if (isReservedOAuthClientId(clientId)) {
+    throw new Error("Linear OAuth client ID looks like a documentation placeholder. Use the public client ID from Linear API settings.");
+  }
 
   const redirectUri = new URL(
     environment.LINEATER_LINEAR_REDIRECT_URI ??

@@ -1,0 +1,62 @@
+---
+interface Props {
+  headingLevel?: "h2" | "h3";
+}
+
+const { headingLevel = "h2" } = Astro.props;
+const Heading = headingLevel;
+---
+
+<article class="release-entry">
+  <aside class="release-meta">
+    <span class="release-version">v0.1.0</span>
+    <time datetime="2026-09-12">12 SEP 2026</time>
+    <span class="release-channel"><i></i> Public preview</span>
+  </aside>
+
+  <div class="release-body">
+    <span class="section-label">RELEASE / 001</span>
+    <Heading>Terminal-native Linear,<br />ready for real work.</Heading>
+    <p class="release-intro">The first complete Lineater preview brings the focused TUI, scriptable CLI, secure authentication, resilient local cache and standalone distribution together in one release.</p>
+
+    <div class="release-groups">
+      <section>
+        <h4>Workspace</h4>
+        <ul>
+          <li>Cached-first list/detail and dynamic Kanban views</li>
+          <li>Complete issue metadata, Markdown and comment workflows</li>
+          <li>Filters, themes, settings and customizable Vim keybindings</li>
+        </ul>
+      </section>
+      <section>
+        <h4>Automation</h4>
+        <ul>
+          <li>Composable CLI with clean JSON and offline reads</li>
+          <li>Server-side metadata filtering and comment commands</li>
+          <li>Terminal clipboard, browser and external editor actions</li>
+        </ul>
+      </section>
+      <section>
+        <h4>Reliability</h4>
+        <ul>
+          <li>Zero-config release OAuth with PKCE and OS-native credential storage</li>
+          <li>Transactional SQLite cache and incremental synchronization</li>
+          <li>Strict filesystem, URL, transport and installer hardening</li>
+        </ul>
+      </section>
+      <section>
+        <h4>Distribution</h4>
+        <ul>
+          <li>Standalone Linux and macOS binaries</li>
+          <li>x64 and ARM64 release artifacts</li>
+          <li>SHA-256 verified, dependency-free installation</li>
+        </ul>
+      </section>
+    </div>
+
+    <div class="release-notes">
+      <span>No manual migration required—existing caches upgrade automatically.</span>
+      <a href="https://github.com/benbugraer/lineater/releases/tag/v0.1.0" target="_blank" rel="noreferrer">Release notes ↗</a>
+    </div>
+  </div>
+</article>

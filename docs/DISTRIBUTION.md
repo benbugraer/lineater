@@ -20,7 +20,7 @@ x64 executable'lar eski işlemcilerle daha geniş uyumluluk için Bun'ın `basel
 Önerilen kurulum komutu:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/benbugraer/lineater/master/scripts/install.sh | sh
+curl -fsSL https://lineater.pages.dev/install | sh
 ```
 
 Installer:
@@ -38,7 +38,7 @@ Installer `sudo` çalıştırmaz ve sistem dizinlerini kendiliğinden değiştir
 ### Belirli bir sürümü kurmak
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/benbugraer/lineater/master/scripts/install.sh \
+curl -fsSL https://lineater.pages.dev/install \
   | LINEATER_VERSION=0.1.0 sh
 ```
 
@@ -47,7 +47,7 @@ curl -fsSL https://raw.githubusercontent.com/benbugraer/lineater/master/scripts/
 ### Farklı bir dizine kurmak
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/benbugraer/lineater/master/scripts/install.sh \
+curl -fsSL https://lineater.pages.dev/install \
   | LINEATER_INSTALL_DIR="$HOME/bin" sh
 ```
 
@@ -80,7 +80,7 @@ bun install --cpu="*" --os="*"
 bun run typecheck
 bun test
 bun run test:installer
-bun run build:release
+LINEATER_RELEASE_LINEAR_CLIENT_ID="$LINEATER_LINEAR_CLIENT_ID" bun run build:release
 ```
 
 Yalnızca belirli hedefleri üretmek mümkündür:
@@ -94,10 +94,14 @@ Yalnızca belirli hedefleri üretmek mümkündür:
 Release sürümünü doğrulamak için:
 
 ```sh
-LINEATER_VERSION=0.1.0 ./scripts/build-release.sh
+LINEATER_VERSION=0.1.0 \
+LINEATER_RELEASE_LINEAR_CLIENT_ID="$LINEATER_LINEAR_CLIENT_ID" \
+./scripts/build-release.sh
 ```
 
 Verilen sürüm `apps/lineater/package.json` içindeki sürümle eşleşmezse build bilinçli olarak durur. CLI'daki `--version` çıktısı da aynı package dosyasından gelir; böylece uygulama, tag ve artifact sürümleri arasında tek doğruluk kaynağı korunur.
+
+`LINEATER_RELEASE_LINEAR_CLIENT_ID`, Linear'da kayıtlı public OAuth uygulamasının gizli olmayan client ID değeridir. Release build bu değeri binary içine gömer; böylece curl ile kurulumdan sonra kullanıcı ayrıca config veya environment variable hazırlamadan TUI içinden giriş yapabilir. Değer GitHub repository variable olarak `LINEATER_LINEAR_CLIENT_ID` adıyla tutulur. Dokümantasyon placeholder'ları (`your-public-client-id`, `GERCEK_LINEAR_CLIENT_ID` vb.) reddedilir. OAuth uygulaması diğer Linear workspace kullanıcılarının yetkilendirmesine açık olmalıdır; aksi halde curl ile kuran kişiler Linear'da client bulunamadı hatası görür. Client secret hiçbir aşamada kullanılmaz veya gömülmez.
 
 ## Otomatik GitHub Release akışı
 
@@ -110,7 +114,7 @@ Verilen sürüm `apps/lineater/package.json` içindeki sürümle eşleşmezse bu
 5. Dört standalone executable cross-compile edilir.
 6. Linux x64 arşivi açılarak `--version` smoke testi yapılır.
 7. Artifact'lar için GitHub build provenance attestation oluşturulur.
-8. Arşivler ve `checksums.txt`, otomatik release notes ile GitHub Release'e eklenir.
+8. Arşivler, `checksums.txt` ve `CHANGELOG.md` notları GitHub Release'e eklenir.
 
 Workflow'a `contents: write`, `id-token: write` ve `attestations: write` dışında repository yetkisi verilmez.
 
@@ -140,8 +144,9 @@ Workflow'a `contents: write`, `id-token: write` ve `attestations: write` dışı
    ```
 
 6. GitHub Actions'taki **Release standalone binaries** workflow'unun tamamlandığını doğrula.
-7. GitHub Release sayfasında dört arşiv, `checksums.txt` ve provenance bilgisinin bulunduğunu kontrol et.
-8. Temiz bir Linux veya macOS ortamında web sitesindeki `curl` komutunu çalıştırıp son kullanıcı kurulumunu doğrula.
+7. Fresh-install OAuth smoke testinin paketlenmiş client ID, PKCE S256, state, exact callback ve scope kontrollerini geçtiğini doğrula.
+8. GitHub Release sayfasında dört arşiv, `checksums.txt` ve provenance bilgisinin bulunduğunu kontrol et.
+9. Temiz bir Linux veya macOS ortamında web sitesindeki `curl` komutunu çalıştırıp son kullanıcı kurulumunu ve tarayıcı login başlangıcını doğrula.
 
 Tag ile package sürümü eşleşmezse workflow release oluşturmadan hata verir. Hatalı bir release'i düzeltmek için mevcut tag'i sessizce değiştirmek yerine package sürümünü artırıp yeni bir patch release yayınlamak önerilir.
 

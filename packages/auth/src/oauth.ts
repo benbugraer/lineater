@@ -263,6 +263,9 @@ export const AuthLive = Layer.effect(
     return {
       login: Effect.gen(function* () {
         const oauthConfig = yield* oauth;
+        // Fail before browser consent when the installed system cannot securely
+        // persist the resulting credential.
+        yield* secrets.get(SECRET_NAME).pipe(Effect.asVoid);
         const state = secureRandom();
         const pkce = yield* Effect.promise(createPkce);
         const authorizationUrl = buildAuthorizationUrl(oauthConfig, state, pkce.challenge);

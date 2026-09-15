@@ -1,68 +1,38 @@
 # Lineater
 
-A fast, keyboard-first, scriptable, local-cache-backed Linear client for the terminal.
+A fast, keyboard-first, scriptable Linear client for the terminal.
 
-## Installation
+Cached issues render immediately. Vim navigation, a dynamic Kanban board, and clean JSON CLI commands stay on the official Linear API. Current release: **v0.1.0 — Public Preview**.
 
-Linux and macOS (x64 and arm64):
+![Lineater Kanban board](docs/images/lineater-board.png)
+
+## Install
+
+Linux and macOS, x64 and arm64. Bun and Node.js are not required:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/benbugraer/lineater/master/scripts/install.sh | sh
+curl -fsSL https://lineater.pages.dev/install | sh
 ```
 
-The installer downloads the correct standalone executable, verifies its SHA-256 checksum, and installs it to `~/.local/bin/lineater`. Bun and Node.js are not required. See [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) for release operations and [`docs/SECURITY.md`](docs/SECURITY.md) for the threat model and release security checklist.
+The installer downloads the matching standalone binary, verifies its SHA-256 checksum, and installs it to `~/.local/bin/lineater`. If that directory is not on `PATH`, add it and restart your shell:
 
-Open Lineater after installation:
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Then open Lineater:
 
 ```bash
 lineater
 ```
 
-On first launch, select **Authorize with Linear** inside the TUI. Lineater opens the system browser, completes OAuth 2.0 + PKCE, securely stores the credential, syncs the first read-model page, and transitions into the workspace without restarting.
+Official releases already include Lineater's public OAuth client ID. On first launch choose **Authorize with Linear**. Lineater opens the system browser, completes OAuth 2.0 + PKCE, stores the credential in the OS secret store, syncs the workspace, and enters the TUI.
 
-## Development requirements
+On Linux, an unlocked Secret Service implementation such as GNOME Keyring or KWallet must be available. Lineater will not store tokens in plaintext.
 
-- Bun 1.3.14+
-- Linux or macOS
+See [`CHANGELOG.md`](CHANGELOG.md), [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md), and [`docs/SECURITY.md`](docs/SECURITY.md).
 
-## Development
-
-```bash
-bun install
-bun run dev
-```
-
-The first run creates the cache at:
-
-```text
-$XDG_DATA_HOME/lineater/lineater.db
-# fallback: ~/.local/share/lineater/lineater.db
-```
-
-Override it during development or tests with `LINEATER_DATABASE_PATH`.
-
-Exit the TUI with `q` or `Ctrl+C`. `Esc` closes overlays or returns to the previous pane.
-
-## Linear OAuth setup
-
-Create an OAuth application in [Linear API settings](https://linear.app/settings/api/applications/new) and register this exact callback URL:
-
-```text
-http://127.0.0.1:45432/oauth/callback
-```
-
-Configure the public client ID—never package a client secret:
-
-```bash
-export LINEATER_LINEAR_CLIENT_ID="your-client-id"
-bun run dev
-```
-
-You can instead create `~/.config/lineater/config.json` with `linearClientId`, `linearRedirectUri`, and `linearScopes`. The same non-sensitive file stores TUI preferences (`theme`, `defaultView`, `autoSync`, and named-command `keybindings`) selected from settings or edited directly. Plaintext token/secret keys and symbolic-link config targets are rejected. The default scopes are `read` and `write`; Lineater rejects `admin` and unknown scopes.
-
-The primary login path is the TUI authorization screen; `lineater auth login` remains available for scripts and diagnostics. Login uses Authorization Code + PKCE (`S256`) and a cryptographically random `state`. The callback binds only to the configured loopback address, expires after five minutes, and accepts one matching callback. Access and rotating refresh tokens are stored only through `Bun.secrets` in macOS Keychain, Linux Secret Service, or Windows Credential Manager. There is deliberately no plaintext fallback.
-
-### TUI keyboard map
+## Keyboard
 
 ```text
 j / k       move down / up
@@ -82,14 +52,16 @@ y / o       copy identifier / open issue in Linear
 S / ,       settings and themes
 ?           help overlay
 b           list / board
-H / L       move issue across workflow states
+[           collapse / expand sidebar
+Shift+V     choose visible Kanban columns
+H / L       move issue across visible workflow states
 Ctrl+E      edit long descriptions/comments in $EDITOR
 Ctrl+S      save issue/comment composer
 r           refresh from Linear
 q           quit
 ```
 
-Named normal-mode commands can be overridden without changing source code, for example:
+Named normal-mode commands can be overridden in `~/.config/lineater/config.json`:
 
 ```json
 {
@@ -100,35 +72,78 @@ Named normal-mode commands can be overridden without changing source code, for e
 }
 ```
 
-`Ctrl+C` remains an emergency quit binding. Invalid/unknown commands are ignored rather than executed.
+`Ctrl+C` remains an emergency quit binding. Unknown commands are ignored.
 
-The default appearance is Linear Dark. Settings include Linear Light, all four Catppuccin flavors (Latte, Frappé, Macchiato, Mocha), Tokyo Night, Nord, and Solarized Light. Changes preview immediately and persist atomically with `0600` permissions.
+The default theme is Linear Dark. Settings also include Linear Light, Catppuccin Latte/Frappé/Macchiato/Mocha, Tokyo Night, Nord, and Solarized Light.
 
-Issue filters compose over cached TUI data and map to Linear relation comparators in CLI queries; `x` clears the filter panel. Startup renders the last SQLite snapshot immediately, then performs cursor-paginated incremental issue sync with a two-minute overlap. Manual `r` performs a complete read-model reconciliation, including removal of stale/deleted cached issues.
+Kanban columns come from each team's Linear workflow. `H`/`L` moves optimistically and rolls both the UI and SQLite cache back if Linear rejects the mutation.
 
-Kanban columns come from each team's Linear workflow-state order; no status names or IDs are hardcoded. `H`/`L` applies an optimistic local move and rolls both UI and SQLite back if Linear rejects the mutation.
+## CLI
 
-### Scriptable commands
+The same executable is scriptable. JSON on stdout is valid JSON only; diagnostics go to stderr.
 
 ```bash
-bun run dev auth status
-bun run dev auth logout
-bun run dev sync
-bun run dev viewer
-bun run dev teams --json
-bun run dev states --json
-bun run dev issues --team TEAM_UUID --state STATE_UUID --priority 2 --label LABEL_UUID --json
-bun run dev create "Issue title" --team TEAM_UUID --priority 2 --json
-bun run dev update ENG-123 --title "Updated title" --assignee none --json
-bun run dev comment ENG-123 "Markdown comment" --json
-bun run dev issues --offline --priority 2 --json
-bun run dev issue ENG-123 --json
-bun run dev issue ENG-123 --offline --json
-bun run dev projects --json
-bun run dev cycles --json
+lineater auth login
+lineater auth status
+lineater auth logout
+lineater sync
+lineater viewer
+lineater teams --json
+lineater states --json
+lineater issues --team TEAM_UUID --state STATE_UUID --priority 2 --label LABEL_UUID --json
+lineater create "Issue title" --team TEAM_UUID --priority 2 --json
+lineater update ENG-123 --title "Updated title" --assignee none --json
+lineater comment ENG-123 "Markdown comment" --json
+lineater issues --offline --priority 2 --json
+lineater issue ENG-123 --json
+lineater issue ENG-123 --offline --json
+lineater projects --json
+lineater cycles --json
 ```
 
-## Verification
+## Troubleshooting
+
+| Symptom | What to do |
+| --- | --- |
+| `lineater: command not found` | Add `~/.local/bin` to `PATH` and restart the shell. |
+| Browser says it cannot find the OAuth client | Official binaries should not need a client ID. For source builds, set a real Linear OAuth client ID—not a placeholder such as `your-public-client-id`. |
+| Login fails on Linux after browser consent | Unlock GNOME Keyring, KWallet, or another Secret Service implementation. |
+| Session expired / create fails after idle time | Press Enter on the authorization screen and sign in again. Pending composer drafts are preserved; save is not retried automatically. |
+| Cached data looks stale | Press `r` for a full reconciliation. Linear remains the source of truth; `~/.local/share/lineater/lineater.db` can be deleted and rebuilt. |
+
+## Development
+
+Requirements: Bun 1.3.14+ on Linux or macOS.
+
+```bash
+bun install
+bun run dev
+```
+
+The first run creates the cache at `$XDG_DATA_HOME/lineater/lineater.db`, falling back to `~/.local/share/lineater/lineater.db`. Override it with `LINEATER_DATABASE_PATH`.
+
+Exit the TUI with `q` or `Ctrl+C`. `Esc` closes overlays or returns to the previous pane.
+
+### Linear OAuth for source builds
+
+Official release binaries are already configured. When running from source, create an OAuth application in [Linear API settings](https://linear.app/settings/api/applications/new) with this exact callback:
+
+```text
+http://127.0.0.1:45432/oauth/callback
+```
+
+Use a public client with PKCE. Never package a client secret:
+
+```bash
+export LINEATER_LINEAR_CLIENT_ID="$LINEAR_OAUTH_CLIENT_ID"
+bun run dev
+```
+
+Use the public client ID shown in Linear. Documentation placeholders are rejected. You can instead set `linearClientId`, `linearRedirectUri`, and `linearScopes` in `~/.config/lineater/config.json`. The same file stores TUI preferences (`theme`, `defaultView`, `autoSync`, and `keybindings`). Plaintext token keys and symbolic-link config targets are rejected. Default scopes are `read` and `write`; `admin` and unknown scopes are refused.
+
+Login uses Authorization Code + PKCE (`S256`) and a random `state`. The callback binds only to the configured loopback address, expires after five minutes, and accepts one matching callback. Access and rotating refresh tokens live only in `Bun.secrets`.
+
+### Verify
 
 ```bash
 bun run lint
@@ -148,18 +163,15 @@ bun run db:generate
 
 Commit the generated SQL and Drizzle metadata together, then register the SQL file in `packages/storage/src/migrations.ts` so standalone binaries embed it.
 
-Inspect the cache with Drizzle Studio:
-
 ```bash
 bun run db:studio
-# Optional alternate database:
 LINEATER_DATABASE_PATH=/path/to/lineater.db bun run db:studio
 ```
 
-Build all standalone release archives locally with:
+Release archives:
 
 ```bash
-bun run build:release
+LINEATER_RELEASE_LINEAR_CLIENT_ID="$LINEATER_LINEAR_CLIENT_ID" bun run build:release
 ```
 
 ## Architecture
@@ -179,21 +191,14 @@ packages/
   testkit/        Shared test utilities
 ```
 
-Dependency direction:
-
 ```text
 apps/lineater → cli / tui → core ← storage / linear / auth
 ```
 
 `core` has no knowledge of Linear SDK, OpenTUI, or SQLite. SQLite is a disposable local cache; Linear remains the source of truth.
 
-## SQLite defaults
+Every `@lineater/storage` connection enables WAL, foreign keys, `synchronous=NORMAL`, and a 5 second busy timeout. Schema migrations run before application use cases and are idempotent.
 
-Every connection managed by `@lineater/storage` enables:
+## License
 
-- `PRAGMA journal_mode = WAL`
-- `PRAGMA foreign_keys = ON`
-- `PRAGMA synchronous = NORMAL`
-- `PRAGMA busy_timeout = 5000`
-
-Schema migrations run before the application use cases and are idempotent.
+MIT

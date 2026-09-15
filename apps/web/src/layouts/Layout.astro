@@ -1,0 +1,72 @@
+---
+import ThemeToggle from "../components/ThemeToggle";
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "Lineater — Linear, from your terminal",
+  description = "A fast, keyboard-first and scriptable Linear client for your terminal.",
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#0d0d0f" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <script is:inline>
+      (() => {
+        const saved = localStorage.getItem("lineater-theme");
+        const theme = saved === "light" || saved === "dark"
+          ? saved
+          : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="nav-shell">
+        <a class="wordmark" href="/" aria-label="Lineater home">
+          <span class="wordmark-mark">L/</span>lineater
+        </a>
+        <nav class="primary-nav" aria-label="Primary navigation">
+          <a href="/#features">Features</a>
+          <a href="/#quickstart">Quickstart</a>
+          <a href="/#workflow">Workflow</a>
+          <a href="/changelog">Changelog</a>
+          <a href="https://github.com/benbugraer/lineater" target="_blank" rel="noreferrer">GitHub ↗</a>
+          <span class="nav-divider"></span>
+          <ThemeToggle client:load />
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-shell">
+        <span>Open source. Built for developers who live in the terminal.</span>
+        <div>
+          <a href="/changelog">Changelog</a>
+          <a href="https://github.com/benbugraer/lineater" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="/#quickstart">Get started</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

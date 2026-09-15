@@ -1,0 +1,138 @@
+---
+layout: ../layouts/Layout.astro
+title: Lineater — Linear, from your terminal
+description: A fast, keyboard-first and scriptable Linear client for your terminal.
+---
+
+import CopyCommand from "../components/CopyCommand";
+import CodePreview from "../components/CodePreview.astro";
+import LineaterPreview from "../components/LineaterPreview";
+import ReleaseEntry from "../components/ReleaseEntry.astro";
+
+<section className="hero page-shell">
+  <div className="hero-kicker">
+    <div className="eyebrow"><span></span> Terminal-native Linear client</div>
+    <a className="version-link" href="#changelog">v0.1.0 <span>Public preview →</span></a>
+  </div>
+  <h1><span>lineater</span>Linear, without<br />leaving your terminal.</h1>
+  <p className="hero-copy">A fast, keyboard-first and scriptable Linear client. Manage issues, projects and cycles with a focused TUI or composable CLI commands.</p>
+  <div className="hero-actions">
+    <a className="button button-primary" href="#quickstart">Get started</a>
+    <a className="button button-secondary" href="#workflow">See the workflow</a>
+    <a className="button button-secondary" href="https://github.com/benbugraer/lineater" target="_blank" rel="noreferrer">GitHub</a>
+  </div>
+</section>
+
+<section id="features" className="features page-shell" aria-label="Features">
+  <article>
+    <span className="feature-index">01</span>
+    <h2>Keyboard-first</h2>
+    <p>Vim navigation, customizable named commands and zero mouse dependency. Filter, copy and open work at terminal speed.</p>
+  </article>
+  <article>
+    <span className="feature-index">02</span>
+    <h2>Local-first</h2>
+    <p>Cached data renders immediately while cursor-paginated incremental sync keeps your Linear workspace current.</p>
+  </article>
+  <article>
+    <span className="feature-index">03</span>
+    <h2>TUI + CLI</h2>
+    <p>Use the full-screen interface for focus, or pipe clean JSON into scripts and coding agents.</p>
+  </article>
+  <article>
+    <span className="feature-index">04</span>
+    <h2>Linear-native</h2>
+    <p>Projects, cycles, dynamic workflows and official API semantics—without flattening how your team works.</p>
+  </article>
+</section>
+
+<section id="workflow" className="showcase page-shell">
+  <div className="section-heading">
+    <div>
+      <span className="section-label">INTERFACE / 01</span>
+      <h2>Your workspace,<br />reduced to signal.</h2>
+    </div>
+    <p>Open Lineater and keep your hands on the keyboard. Search, triage, update and move on.</p>
+  </div>
+  <LineaterPreview client:load />
+</section>
+
+<section id="quickstart" className="quickstart page-shell">
+  <div className="section-heading compact">
+    <div>
+      <span className="section-label">QUICKSTART / 02</span>
+      <h2>One command away.</h2>
+    </div>
+    <p>Install the standalone executable, authenticate with Linear, and start working.</p>
+  </div>
+
+  <div className="steps-grid">
+    <article>
+      <span>01 / INSTALL</span>
+      <CopyCommand command="curl -fsSL https://lineater.pages.dev/install | sh" client:load />
+    </article>
+    <article>
+      <span>02 / OPEN + CONNECT</span>
+      <CopyCommand command="lineater" client:load />
+    </article>
+    <article>
+      <span>03 / AUTOMATE</span>
+      <CopyCommand command="lineater issues --json | jq" client:load />
+    </article>
+  </div>
+  <p className="install-note">OAuth ready · Linux and macOS · x64 and arm64 · no Bun or Node.js required · SHA-256 verified</p>
+</section>
+
+<section className="code-section page-shell">
+  <div className="section-heading compact">
+    <div>
+      <span className="section-label">SCRIPTABLE / 03</span>
+      <h2>Made for humans<br />and agents.</h2>
+    </div>
+    <p>Every core workflow is available from the CLI. JSON stays clean on stdout and diagnostics stay out of your pipes.</p>
+  </div>
+
+  <CodePreview />
+</section>
+
+<section className="features page-shell assurance" aria-label="Architecture and security">
+  <article>
+    <span className="feature-index">SEC / 01</span>
+    <h2>Public OAuth + PKCE</h2>
+    <p>No packaged client secret and no plaintext token fallback. Rotating credentials stay in the operating system’s secure store.</p>
+  </article>
+  <article>
+    <span className="feature-index">CACHE / 02</span>
+    <h2>Disposable SQLite</h2>
+    <p>Transactional migrations, workspace isolation and instant cached rendering. Linear always remains the source of truth.</p>
+  </article>
+  <article>
+    <span className="feature-index">EFFECT / 03</span>
+    <h2>Typed boundaries</h2>
+    <p>Core use cases define behavior while Linear, storage, auth, CLI and TUI remain replaceable typed adapters.</p>
+  </article>
+  <article>
+    <span className="feature-index">SHIP / 04</span>
+    <h2>Standalone releases</h2>
+    <p>Linux and macOS, x64 and arm64, checksum-verified—with no Node.js or Bun installation required.</p>
+  </article>
+</section>
+
+<section id="changelog" className="changelog-preview page-shell">
+  <div className="section-heading compact">
+    <div>
+      <span className="section-label">CHANGELOG / 04</span>
+      <h2>What shipped.</h2>
+    </div>
+    <p>Versioned product changes, security improvements and upgrade guidance—kept clear and auditable.</p>
+  </div>
+  <ReleaseEntry headingLevel="h3" />
+  <a className="changelog-all" href="/changelog">View complete changelog →</a>
+</section>
+
+<section className="closing page-shell">
+  <span className="section-label">AVAILABLE NOW</span>
+  <h2>Less context switching.<br />More work moving.</h2>
+  <p>Lineater is in active development. Follow the repository and help shape a terminal-native Linear workflow.</p>
+  <a className="button button-primary" href="https://github.com/benbugraer/lineater" target="_blank" rel="noreferrer">View on GitHub ↗</a>
+</section>

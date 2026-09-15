@@ -1,0 +1,18 @@
+---
+layout: ../layouts/Layout.astro
+title: Changelog — Lineater
+description: Release history, new features, security improvements, and upgrade notes for Lineater.
+---
+
+import ReleaseEntry from "../components/ReleaseEntry.astro";
+
+<section className="changelog-hero page-shell">
+  <div className="eyebrow"><span></span> Product history</div>
+  <span className="section-label">CHANGELOG</span>
+  <h1>Every release,<br />without the noise.</h1>
+  <p>New workflows, reliability improvements, security changes and upgrade guidance—documented as Lineater evolves.</p>
+</section>
+
+<section className="changelog-list page-shell" aria-label="Lineater releases">
+  <ReleaseEntry />
+</section>

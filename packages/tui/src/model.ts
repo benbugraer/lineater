@@ -4,6 +4,13 @@ export type LayoutMode = "too-small" | "single" | "medium" | "wide";
 export type WorkspaceView = "list" | "board";
 export type ActivePane = "sidebar" | "issues" | "detail";
 
+export const isAuthenticationFailure = (cause: unknown): boolean => {
+  if (typeof cause !== "object" || cause === null || !("_tag" in cause) || !("reason" in cause)) return false;
+  const tagged = Object.fromEntries(Object.entries(cause));
+  return (tagged._tag === "AuthError" && ["expired", "not-authenticated"].includes(String(tagged.reason)))
+    || (tagged._tag === "LinearApiError" && tagged.reason === "authentication");
+};
+
 export interface IssueFilters {
   readonly stateId: string | null;
   readonly projectId: string | null;
@@ -32,10 +39,42 @@ export const layoutMode = (width: number, height: number): LayoutMode => {
   return "wide";
 };
 
+const workflowStateTypeRank = (type: string): number => {
+  switch (type) {
+    case "triage": return 0;
+    case "backlog": return 1;
+    case "unstarted": return 2;
+    case "started": return 3;
+    case "completed": return 4;
+    case "canceled": return 5;
+    case "duplicate": return 6;
+    default: return 7;
+  }
+};
+
+/** Orders team states by Linear's fixed workflow categories, then each state's category position. */
 export const orderedStates = (model: InitialReadModel, teamId: string | null): readonly WorkflowState[] =>
   model.workflowStates
     .filter((state) => teamId === null || state.teamId === teamId)
-    .toSorted((left, right) => left.position - right.position || left.name.localeCompare(right.name));
+    .toSorted((left, right) => workflowStateTypeRank(left.type) - workflowStateTypeRank(right.type)
+      || left.position - right.position
+      || left.name.localeCompare(right.name));
+
+/** Returns workflow columns in team order after applying local board visibility choices. */
+export const visibleBoardStates = (
+  model: InitialReadModel,
+  teamId: string | null,
+  hiddenStateIds: ReadonlySet<string>,
+): readonly WorkflowState[] => orderedStates(model, teamId).filter(({ id }) => !hiddenStateIds.has(id));
+
+/** Orders board cards by Linear's workspace-wide manual `sortOrder`. */
+export const orderedBoardIssues = (issues: readonly Issue[]): readonly Issue[] =>
+  issues.toSorted((left, right) => {
+    if (left.sortOrder === null && right.sortOrder === null) return left.number - right.number;
+    if (left.sortOrder === null) return 1;
+    if (right.sortOrder === null) return -1;
+    return left.sortOrder - right.sortOrder || left.number - right.number;
+  });
 
 export const visibleIssues = (
   model: InitialReadModel,

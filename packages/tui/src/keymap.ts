@@ -41,6 +41,8 @@ export const commandNames = [
   "app.refresh",
   "app.quit",
   "view.toggle",
+  "view.toggleSidebar",
+  "view.boardColumns",
   "board.moveLeft",
   "board.moveRight",
 ] as const;
@@ -81,6 +83,8 @@ export const normalBindingDefinitions = [
   { key: "q", cmd: "app.quit" },
   { key: "ctrl+c", cmd: "app.quit" },
   { key: "b", cmd: "view.toggle" },
+  { key: "[", cmd: "view.toggleSidebar" },
+  { key: { name: "v", shift: true }, cmd: "view.boardColumns" },
   { key: { name: "h", shift: true }, cmd: "board.moveLeft" },
   { key: { name: "l", shift: true }, cmd: "board.moveRight" },
 ] as const;
@@ -157,7 +161,7 @@ export const settingsBindings: readonly Binding<Renderable, KeyEvent>[] = [
   { key: "right", cmd: "navigation.right" },
 ];
 
-export const composerBindings: readonly Binding<Renderable, KeyEvent>[] = [
+export const composerBindingDefinitions = [
   { key: "escape", cmd: "app.back" },
   { key: "ctrl+c", cmd: "app.quit" },
   { key: "tab", cmd: "composer.nextField" },
@@ -171,7 +175,9 @@ export const composerBindings: readonly Binding<Renderable, KeyEvent>[] = [
   { key: "ctrl+e", cmd: "composer.externalEditor" },
   { key: { name: "return", ctrl: true }, cmd: "composer.save" },
   { key: "ctrl+s", cmd: "composer.save" },
-];
+] as const;
+
+export const composerBindings: readonly Binding<Renderable, KeyEvent>[] = composerBindingDefinitions;
 
 export const commentBindings: readonly Binding<Renderable, KeyEvent>[] = [
   { key: "escape", cmd: "app.back" },

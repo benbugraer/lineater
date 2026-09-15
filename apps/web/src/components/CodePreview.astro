@@ -1,0 +1,11 @@
+<div class="code-window">
+  <div class="code-title"><span>terminal</span><span>sh</span></div>
+  <pre><code><span class="code-comment"># List your active issues as JSON</span>
+<span class="code-command">lineater</span> issues --assignee me --json | jq '.[] | &#123;id, title, priority&#125;'
+
+<span class="code-comment"># Open a specific issue</span>
+<span class="code-command">lineater</span> issue ENG-241
+
+<span class="code-comment"># Switch into the full-screen TUI</span>
+<span class="code-command">lineater</span></code></pre>
+</div>
