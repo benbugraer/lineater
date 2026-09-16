@@ -11,7 +11,7 @@ Cached issues render immediately. Vim navigation, a dynamic Kanban board, and cl
 Linux and macOS, x64 and arm64. Bun and Node.js are not required:
 
 ```bash
-curl -fsSL https://lineater.pages.dev/install | sh
+curl -fsSL https://benbugraer.github.io/lineater/install | sh
 ```
 
 The installer downloads the matching standalone binary, verifies its SHA-256 checksum, and installs it to `~/.local/bin/lineater`. If that directory is not on `PATH`, add it and restart your shell:

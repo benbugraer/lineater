@@ -20,7 +20,7 @@ x64 executable'lar eski işlemcilerle daha geniş uyumluluk için Bun'ın `basel
 Önerilen kurulum komutu:
 
 ```sh
-curl -fsSL https://lineater.pages.dev/install | sh
+curl -fsSL https://benbugraer.github.io/lineater/install | sh
 ```
 
 Installer:
@@ -38,7 +38,7 @@ Installer `sudo` çalıştırmaz ve sistem dizinlerini kendiliğinden değiştir
 ### Belirli bir sürümü kurmak
 
 ```sh
-curl -fsSL https://lineater.pages.dev/install \
+curl -fsSL https://benbugraer.github.io/lineater/install \
   | LINEATER_VERSION=0.1.0 sh
 ```
 
@@ -47,7 +47,7 @@ curl -fsSL https://lineater.pages.dev/install \
 ### Farklı bir dizine kurmak
 
 ```sh
-curl -fsSL https://lineater.pages.dev/install \
+curl -fsSL https://benbugraer.github.io/lineater/install \
   | LINEATER_INSTALL_DIR="$HOME/bin" sh
 ```
 

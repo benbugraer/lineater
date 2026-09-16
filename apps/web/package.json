@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && cp ../../scripts/install.sh dist/install",
     "preview": "astro preview",
     "astro": "astro"
   },
