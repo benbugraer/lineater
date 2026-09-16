@@ -240,11 +240,52 @@ a {
   line-height: 1.8;
 }
 
+.hero-install {
+  width: min(720px, 100%);
+  margin-top: 30px;
+}
+
+.hero-install-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero-install-meta span:first-child {
+  color: var(--accent);
+}
+
+.hero-install .copy-command {
+  min-height: 58px;
+  margin-top: 0;
+  border-color: var(--border-strong);
+  background: var(--surface);
+  box-shadow: 7px 7px 0 var(--accent-soft);
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.hero-install .copy-command:hover {
+  border-color: var(--accent);
+  box-shadow: 4px 4px 0 var(--accent-soft);
+  transform: translate(3px, 3px);
+}
+
+.hero-install .copy-command code {
+  font-size: 11px;
+}
+
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 32px;
+  margin-top: 28px;
 }
 
 .button {

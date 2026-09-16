@@ -16,6 +16,13 @@ import ReleaseEntry from "../components/ReleaseEntry.astro";
   </div>
   <h1><span>lineater</span>Linear, without<br />leaving your terminal.</h1>
   <p className="hero-copy">A fast, keyboard-first and scriptable Linear client. Manage issues, projects and cycles with a focused TUI or composable CLI commands.</p>
+  <div className="hero-install">
+    <div className="hero-install-meta">
+      <span>Quick install</span>
+      <span>Linux + macOS · x64 + arm64</span>
+    </div>
+    <CopyCommand command="curl -fsSL https://benbugraer.github.io/lineater/install | sh" client:load />
+  </div>
   <div className="hero-actions">
     <a className="button button-primary" href="#quickstart">Get started</a>
     <a className="button button-secondary" href="#workflow">See the workflow</a>
